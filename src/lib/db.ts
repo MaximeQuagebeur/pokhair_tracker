@@ -7,6 +7,8 @@ export interface FileRecord {
   size: number;
   mtimeMs: number;
   hands: number;
+  tournaments: number;
+  parsedAt: number;
 }
 
 class PokhairDB extends Dexie {
@@ -43,6 +45,12 @@ class PokhairDB extends Dexie {
       .upgrade(async (tx) => {
         await tx.table('files').clear();
       });
+    // v5 stores invested / collected / net explicitly: re-scan every file.
+    this.version(5)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table('files').clear();
+      });
   }
 }
 
@@ -55,7 +63,7 @@ export async function ingestFile(file: { path: string; size: number; mtimeMs: nu
   await db.transaction('rw', db.hands, db.tournaments, db.files, async () => {
     await db.hands.bulkPut(hands);
     await db.tournaments.bulkPut(tournaments);
-    await db.files.put({ ...file, hands: hands.length });
+    await db.files.put({ ...file, hands: hands.length, tournaments: tournaments.length, parsedAt: Date.now() });
   });
   return hands.length;
 }

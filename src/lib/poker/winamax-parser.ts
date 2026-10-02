@@ -82,8 +82,9 @@ export function parseTournamentSummary(block: string, sourceFile = ''): Tourname
       +(/(\d+)\s*s\b/.exec(played)?.[1] ?? 0)) *
     1000;
   const position = find(/^You finished in (\d+)/i);
-  const won = find(/^You won (.+)$/i);
+  const won = find(/^You won\s*:?\s*(.+)$/i);
   const players = find(/^Registered players\s*:\s*(\d+)/i);
+  const winnings = won ? Math.round(sumEuros(won[1]) * 100) / 100 : 0;
 
   return {
     id: head[2],
@@ -93,7 +94,8 @@ export function parseTournamentSummary(block: string, sourceFile = ''): Tourname
     startTime,
     endTime: startTime + duration,
     buyIn,
-    winnings: won ? Math.round(sumEuros(won[1]) * 100) / 100 : 0,
+    winnings,
+    net: Math.round((winnings - buyIn) * 100) / 100,
     position: position ? +position[1] : null,
     players: players ? +players[1] : null,
     finished: !!position || !!won,
@@ -322,8 +324,9 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
   const winnings = collected.size ? collected : summaryWon;
   const invested = (p: string) => contrib.get(p) ?? 0;
 
-  const heroInvested = invested(hero);
-  const net = round((winnings.get(hero) ?? 0) - heroInvested);
+  const heroInvested = round(invested(hero));
+  const heroCollected = round(winnings.get(hero) ?? 0);
+  const net = round(heroCollected - heroInvested);
   const showdown = hadShowdown && !folded.has(hero);
 
   let allInEv = net;
@@ -358,6 +361,8 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
     bigBlind,
     hero,
     heroCards: heroCardsRaw,
+    invested: heroInvested,
+    collected: heroCollected,
     net,
     allInEv,
     allInAdjusted,

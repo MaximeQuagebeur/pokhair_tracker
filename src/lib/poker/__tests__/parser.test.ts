@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { evaluate, parseCards } from '../cards';
-import { availableLimits, filterHands } from '../filters';
-import { buildTournamentCurve, computeStats } from '../stats';
+import { availableLimits, filterHands, filterTournaments, type HandFilters } from '../filters';
+import { buildCurves, buildTournamentCurve, computeStats } from '../stats';
 import { parseWinamaxFile } from '../winamax-parser';
 
 const score = (s: string) => evaluate(parseCards(s));
@@ -335,5 +335,47 @@ describe('real Winamax tournament histories', () => {
     expect(stats.itm).toBe(50);
     expect(stats.winrate).toBeNull();
     expect(buildTournamentCurve([lost, won]).map((p) => p.net)).toEqual([0, -0.25, 0.25]);
+  });
+});
+
+const EXPRESSO_SUMMARY = (id: string, won: string | null) => `Winamax Poker - Tournament summary : Expresso(${id})
+Player : MaxDr644
+Buy-In : 0.46€ + 0.04€
+Registered players : 3
+Prizepool : 1€
+Tournament started 2026/10/01 18:00:00 UTC
+You played 4min 10s
+You finished in ${won ? '1st' : '3rd'} place
+${won ? `You won ${won}\n` : ''}`;
+
+describe('net won by game type', () => {
+  const cash = parseWinamaxFile(SIMPLE_HAND, 'cash.txt').hands[0];
+  const expressoWin = parseWinamaxFile(EXPRESSO_SUMMARY('1', '1€'), 'a_summary.txt').tournaments[0];
+  const expressoLoss = parseWinamaxFile(EXPRESSO_SUMMARY('2', null), 'b_summary.txt').tournaments[0];
+  const expressoHand = parseWinamaxFile(EXPRESSO_HAND, 'expresso.txt').hands[0];
+  const hands = [cash, expressoHand];
+  const tournaments = [expressoWin, expressoLoss];
+  const view = (game: HandFilters['game']) => {
+    const filters: HandFilters = { date: 'all', game, limit: 'all' };
+    return computeStats(filterHands(hands, filters), filterTournaments(tournaments, filters));
+  };
+
+  it('cash: collected - invested', () => {
+    expect(cash).toMatchObject({ invested: 0.14, collected: 0.21, net: 0.07 });
+    expect(view('cash').net).toBeCloseTo(0.07, 4);
+    expect(view('cash').tournaments).toBe(0);
+  });
+
+  it('expresso: You won - total buy-in, never chips', () => {
+    expect(expressoWin).toMatchObject({ buyIn: 0.5, winnings: 1, net: 0.5 });
+    expect(expressoLoss).toMatchObject({ buyIn: 0.5, winnings: 0, net: -0.5 });
+    expect(view('expresso').net).toBeCloseTo(0, 4);
+    expect(view('expresso').roi).toBeCloseTo(0, 4);
+  });
+
+  it('global: cash + tournaments', () => {
+    expect(view('all').net).toBeCloseTo(0.07, 4);
+    const curve = buildCurves(hands, tournaments, 'eur');
+    expect(curve[curve.length - 1].net).toBeCloseTo(0.07, 4);
   });
 });

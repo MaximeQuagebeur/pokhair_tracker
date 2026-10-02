@@ -12,8 +12,10 @@ export interface TournamentRecord {
   endTime: number;
   /** Total cost in € (buy-in + fee). */
   buyIn: number;
-  /** Total € won. */
+  /** Total € won (`You won`, 0 if absent). */
   winnings: number;
+  /** winnings - buyIn. */
+  net: number;
   position: number | null;
   players: number | null;
   finished: boolean;
@@ -34,7 +36,11 @@ export interface HandRecord {
   bigBlind: number;
   hero: string;
   heroCards: string[];
-  /** Net won (€ for cash, chips for tournaments): collected - invested. */
+  /** Sum of hero's blinds, antes, calls, bets and raises (€ for cash, chips for tournaments). */
+  invested: number;
+  /** Sum of hero's `collected` / summary `won` amounts (net of rake, uncalled bets included). */
+  collected: number;
+  /** collected - invested. */
   net: number;
   /** All-in adjusted expected net (equals `net` when no pre-river all-in). */
   allInEv: number;

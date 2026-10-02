@@ -29,7 +29,7 @@ const pct = (num: number, den: number) => (den > 0 ? (num / den) * 100 : null);
 
 /** Tournament hand amounts are chips: € results come from summary files instead. */
 export const isCashHand = (h: HandRecord) => h.gameType === 'cash';
-export const tournamentProfit = (t: TournamentRecord) => t.winnings - t.buyIn;
+export const tournamentProfit = (t: TournamentRecord) => t.net;
 
 export function computeStats(hands: HandRecord[], tournaments: TournamentRecord[] = []): DashboardStats {
   let cashHands = 0;
