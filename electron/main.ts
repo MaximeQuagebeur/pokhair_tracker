@@ -45,6 +45,20 @@ function defaultWinamaxDir(): string | undefined {
   return candidates.find((p) => fs.existsSync(p));
 }
 
+/** Windows reports stale size/mtime for files kept open by Winamax unless queried through a handle. */
+async function freshStat(file: string): Promise<fs.Stats> {
+  try {
+    const handle = await fs.promises.open(file, 'r');
+    try {
+      return await handle.stat();
+    } finally {
+      await handle.close();
+    }
+  } catch {
+    return fs.promises.stat(file);
+  }
+}
+
 async function listTxtFiles(dir: string, acc: { path: string; size: number; mtimeMs: number }[] = []) {
   const entries = await fs.promises.readdir(dir, { withFileTypes: true });
   for (const entry of entries) {
@@ -52,21 +66,28 @@ async function listTxtFiles(dir: string, acc: { path: string; size: number; mtim
     if (entry.isDirectory()) {
       await listTxtFiles(full, acc);
     } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.txt') && !/summary/i.test(entry.name)) {
-      const stat = await fs.promises.stat(full);
+      const stat = await freshStat(full);
       acc.push({ path: full, size: stat.size, mtimeMs: stat.mtimeMs });
     }
   }
   return acc;
 }
 
+const POLL_INTERVAL_MS = 20_000;
+let pollTimer: NodeJS.Timeout | null = null;
+
 function startWatching(dir: string) {
   watcher?.close();
+  if (pollTimer) clearInterval(pollTimer);
+  const notify = () => mainWindow?.webContents.send('folder:changed');
+  // fs.watch can miss appends to files held open by Winamax: poll as a fallback (sync is incremental).
+  pollTimer = setInterval(notify, POLL_INTERVAL_MS);
   let timer: NodeJS.Timeout | null = null;
   try {
     watcher = fs.watch(dir, { recursive: true }, (_event, filename) => {
       if (filename && !filename.toString().toLowerCase().endsWith('.txt')) return;
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => mainWindow?.webContents.send('folder:changed'), 1500);
+      timer = setTimeout(notify, 1500);
     });
   } catch (err) {
     console.error('Watcher error', err);
@@ -148,5 +169,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   watcher?.close();
+  if (pollTimer) clearInterval(pollTimer);
   if (process.platform !== 'darwin') app.quit();
 });

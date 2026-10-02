@@ -27,6 +27,7 @@ export function useSync() {
 }
 
 const yieldToUi = () => new Promise((resolve) => setTimeout(resolve, 0));
+const RECENT_MS = 24 * 60 * 60 * 1000;
 
 export function SyncProvider({ children }: { children: ReactNode }) {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -39,7 +40,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const pending = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const syncFolder = useCallback(async (dir: string, full = false) => {
+  const syncFolder = useCallback(async (dir: string, full = false, rereadRecent = false) => {
     const api = window.pokhair;
     if (!api) return;
     if (running.current) {
@@ -57,6 +58,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         const known = new Map((await db.files.toArray()).map((f) => [f.path, f]));
         const changed = files.filter((f) => {
           const k = known.get(f.path);
+          // Files of active tables may report stale metadata on Windows: a manual refresh re-reads them anyway.
+          if (rereadRecent && Date.now() - f.mtimeMs < RECENT_MS) return true;
           return !k || k.size !== f.size || k.mtimeMs !== f.mtimeMs;
         });
         setProgress({ done: 0, total: changed.length });
@@ -66,6 +69,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
           await yieldToUi();
         }
         full = false;
+        rereadRecent = false;
       } while (pending.current);
       setLastSync(new Date());
       setStatus('idle');
@@ -130,7 +134,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const resync = useCallback(
     async (full = false) => {
-      if (folder && window.pokhair) await syncFolder(folder, full);
+      if (folder && window.pokhair) await syncFolder(folder, full, true);
     },
     [folder, syncFolder],
   );
