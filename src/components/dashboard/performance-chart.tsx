@@ -15,9 +15,18 @@ const SERIES = [
 
 type SeriesKey = (typeof SERIES)[number]['key'];
 
-export function PerformanceChart({ data, unit }: { data: CurvePoint[]; unit: Unit }) {
+interface PerformanceChartProps {
+  data: CurvePoint[];
+  unit: Unit;
+  xAxis: 'hand' | 'tournament';
+  series?: readonly SeriesKey[];
+}
+
+export function PerformanceChart({ data, unit, xAxis, series }: PerformanceChartProps) {
   const [hidden, setHidden] = useState<Set<SeriesKey>>(new Set());
   const last = data[data.length - 1];
+  const visibleSeries = SERIES.filter((s) => !series || series.includes(s.key));
+  const xLabel = xAxis === 'hand' ? 'Main' : 'Tournoi';
 
   const toggle = (key: SeriesKey) =>
     setHidden((prev) => {
@@ -32,10 +41,12 @@ export function PerformanceChart({ data, unit }: { data: CurvePoint[]; unit: Uni
       <CardHeader className="flex-row items-start justify-between space-y-0">
         <div className="space-y-1.5">
           <CardTitle>Graphique de performance</CardTitle>
-          <CardDescription>Gains cumulés par nombre de mains jouées</CardDescription>
+          <CardDescription>
+            Gains cumulés par {xAxis === 'hand' ? 'nombre de mains jouées' : 'tournoi joué'}
+          </CardDescription>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
-          {SERIES.map((s) => (
+          {visibleSeries.map((s) => (
             <button
               key={s.key}
               type="button"
@@ -57,7 +68,7 @@ export function PerformanceChart({ data, unit }: { data: CurvePoint[]; unit: Uni
           <LineChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
-              dataKey="hand"
+              dataKey="x"
               type="number"
               domain={[0, 'dataMax']}
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
@@ -77,10 +88,10 @@ export function PerformanceChart({ data, unit }: { data: CurvePoint[]; unit: Uni
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              labelFormatter={(v) => `Main #${Number(v).toLocaleString('fr-FR')}`}
+              labelFormatter={(v) => `${xLabel} #${Number(v).toLocaleString('fr-FR')}`}
               formatter={(v) => formatAmount(Number(v), unit)}
             />
-            {SERIES.map((s) => (
+            {visibleSeries.map((s) => (
               <Line
                 key={s.key}
                 dataKey={s.key}

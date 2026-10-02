@@ -65,7 +65,7 @@ async function listTxtFiles(dir: string, acc: { path: string; size: number; mtim
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       await listTxtFiles(full, acc);
-    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.txt') && !/summary/i.test(entry.name)) {
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.txt')) {
       const stat = await freshStat(full);
       acc.push({ path: full, size: stat.size, mtimeMs: stat.mtimeMs });
     }

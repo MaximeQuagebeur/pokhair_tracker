@@ -1,15 +1,22 @@
-import type { HandRecord } from './types';
+import type { HandRecord, TournamentRecord } from './types';
 
 export type Unit = 'eur' | 'bb';
 
 export interface DashboardStats {
   hands: number;
+  cashHands: number;
+  /** € : cash net + tournament results. */
   net: number;
+  /** Cash only (tournament chips are not money). */
   netBB: number;
-  allInEv: number;
-  /** bb/100 */
-  winrate: number;
-  evWinrate: number;
+  /** Cash bb/100. */
+  winrate: number | null;
+  evWinrate: number | null;
+  tournaments: number;
+  tournamentNet: number;
+  /** % of total buy-ins (null when only freerolls). */
+  roi: number | null;
+  itm: number | null;
   vpip: number;
   pfr: number;
   threeBet: number | null;
@@ -20,13 +27,14 @@ export interface DashboardStats {
 
 const pct = (num: number, den: number) => (den > 0 ? (num / den) * 100 : null);
 
-/** Tournament amounts are chips: they count in BB but never in €. */
-export const isMoneyHand = (h: HandRecord) => h.gameType === 'cash';
+/** Tournament hand amounts are chips: € results come from summary files instead. */
+export const isCashHand = (h: HandRecord) => h.gameType === 'cash';
+export const tournamentProfit = (t: TournamentRecord) => t.winnings - t.buyIn;
 
-export function computeStats(hands: HandRecord[]): DashboardStats {
-  let net = 0;
+export function computeStats(hands: HandRecord[], tournaments: TournamentRecord[] = []): DashboardStats {
+  let cashHands = 0;
+  let cashNet = 0;
   let netBB = 0;
-  let ev = 0;
   let evBB = 0;
   let vpip = 0;
   let pfr = 0;
@@ -39,13 +47,13 @@ export function computeStats(hands: HandRecord[]): DashboardStats {
   let wonSd = 0;
 
   for (const h of hands) {
-    if (isMoneyHand(h)) {
-      net += h.net;
-      ev += h.allInEv;
-    }
-    if (h.bigBlind > 0) {
-      netBB += h.net / h.bigBlind;
-      evBB += h.allInEv / h.bigBlind;
+    if (isCashHand(h)) {
+      cashHands++;
+      cashNet += h.net;
+      if (h.bigBlind > 0) {
+        netBB += h.net / h.bigBlind;
+        evBB += h.allInEv / h.bigBlind;
+      }
     }
     if (h.vpip) vpip++;
     if (h.pfr) pfr++;
@@ -58,14 +66,22 @@ export function computeStats(hands: HandRecord[]): DashboardStats {
     if (h.wonAtShowdown) wonSd++;
   }
 
+  const finished = tournaments.filter((t) => t.finished);
+  const tournamentNet = finished.reduce((acc, t) => acc + tournamentProfit(t), 0);
+  const totalBuyIn = finished.reduce((acc, t) => acc + t.buyIn, 0);
   const n = hands.length;
+
   return {
     hands: n,
-    net,
+    cashHands,
+    net: cashNet + tournamentNet,
     netBB,
-    allInEv: ev,
-    winrate: n ? netBB / (n / 100) : 0,
-    evWinrate: n ? evBB / (n / 100) : 0,
+    winrate: cashHands ? netBB / (cashHands / 100) : null,
+    evWinrate: cashHands ? evBB / (cashHands / 100) : null,
+    tournaments: finished.length,
+    tournamentNet,
+    roi: pct(tournamentNet, totalBuyIn),
+    itm: pct(finished.filter((t) => t.winnings > 0).length, finished.length),
     vpip: pct(vpip, n) ?? 0,
     pfr: pct(pfr, n) ?? 0,
     threeBet: pct(threeBet, threeBetOpp),
@@ -76,30 +92,71 @@ export function computeStats(hands: HandRecord[]): DashboardStats {
 }
 
 export interface CurvePoint {
-  hand: number;
+  /** X axis: hand number, or tournament number for tournament-only views. */
+  x: number;
   net: number;
   ev: number;
   showdown: number;
   nonShowdown: number;
 }
 
-/** Cumulative curves, downsampled to at most `maxPoints` (last point always kept). */
-export function buildCurves(hands: HandRecord[], unit: Unit, maxPoints = 1500): CurvePoint[] {
-  const points: CurvePoint[] = [{ hand: 0, net: 0, ev: 0, showdown: 0, nonShowdown: 0 }];
-  const step = Math.max(1, Math.ceil(hands.length / maxPoints));
+function downsample<T>(items: T[], maxPoints: number, toPoint: (item: T, i: number) => CurvePoint | null): CurvePoint[] {
+  const points: CurvePoint[] = [{ x: 0, net: 0, ev: 0, showdown: 0, nonShowdown: 0 }];
+  const step = Math.max(1, Math.ceil(items.length / maxPoints));
+  items.forEach((item, i) => {
+    const point = toPoint(item, i);
+    if (point && ((i + 1) % step === 0 || i === items.length - 1)) points.push(point);
+  });
+  return points;
+}
+
+/**
+ * Cumulative curves by hand. Cash hands drive every line; in € mode, each finished
+ * tournament's result is added to Net Won / All-In EV at the moment it ended.
+ */
+export function buildCurves(
+  hands: HandRecord[],
+  tournaments: TournamentRecord[],
+  unit: Unit,
+  maxPoints = 1500,
+): CurvePoint[] {
+  const results = unit === 'eur' ? tournaments.filter((t) => t.finished).sort((a, b) => a.endTime - b.endTime) : [];
+  let r = 0;
   let net = 0;
   let ev = 0;
   let sd = 0;
   let nsd = 0;
-  hands.forEach((h, i) => {
-    const factor = unit === 'bb' ? 1 / (h.bigBlind || 1) : isMoneyHand(h) ? 1 : 0;
-    net += h.net * factor;
-    ev += h.allInEv * factor;
-    if (h.showdown) sd += h.net * factor;
-    else nsd += h.net * factor;
-    if ((i + 1) % step === 0 || i === hands.length - 1) {
-      points.push({ hand: i + 1, net, ev, showdown: sd, nonShowdown: nsd });
+  const addResultsUntil = (time: number) => {
+    for (; r < results.length && results[r].endTime <= time; r++) {
+      net += tournamentProfit(results[r]);
+      ev += tournamentProfit(results[r]);
     }
+  };
+
+  const points = downsample(hands, maxPoints, (h, i) => {
+    addResultsUntil(h.timestamp);
+    if (isCashHand(h)) {
+      const factor = unit === 'bb' ? 1 / (h.bigBlind || 1) : 1;
+      net += h.net * factor;
+      ev += h.allInEv * factor;
+      if (h.showdown) sd += h.net * factor;
+      else nsd += h.net * factor;
+    }
+    return { x: i + 1, net, ev, showdown: sd, nonShowdown: nsd };
   });
+
+  addResultsUntil(Infinity);
+  const last = points[points.length - 1];
+  if (last.net !== net) points.push({ x: hands.length, net, ev, showdown: sd, nonShowdown: nsd });
   return points;
+}
+
+/** Cumulative € profit by tournament played (finished ones, chronological). */
+export function buildTournamentCurve(tournaments: TournamentRecord[], maxPoints = 1500): CurvePoint[] {
+  const finished = tournaments.filter((t) => t.finished).sort((a, b) => a.endTime - b.endTime);
+  let net = 0;
+  return downsample(finished, maxPoints, (t, i) => {
+    net += tournamentProfit(t);
+    return { x: i + 1, net, ev: net, showdown: 0, nonShowdown: 0 };
+  });
 }

@@ -27,22 +27,45 @@ function MiniStat({ label, value, hint }: { label: string; value: string; hint: 
   );
 }
 
-export function StatCards({ stats, unit }: { stats: DashboardStats; unit: Unit }) {
+export type StatsMode = 'cash' | 'tournament' | 'all';
+
+function primaryStats(stats: DashboardStats, unit: Unit, mode: StatsMode) {
+  const hands = `${stats.hands.toLocaleString('fr-FR')} mains`;
+  const tournaments = `${stats.tournaments.toLocaleString('fr-FR')} tournois`;
+  if (mode === 'tournament') {
+    return [
+      {
+        label: 'ROI',
+        value: formatNumber(stats.roi, 1, ' %'),
+        hint: `${tournaments} · ITM ${formatNumber(stats.itm, 1, ' %')}`,
+        tone: toneOf(stats.roi ?? 0),
+      },
+      { label: 'Gains nets', value: formatAmount(stats.net, 'eur'), hint: hands, tone: toneOf(stats.net) },
+    ];
+  }
   const net = unit === 'eur' ? stats.net : stats.netBB;
+  return [
+    {
+      label: mode === 'all' ? 'Winrate cash' : 'Winrate',
+      value: formatNumber(stats.winrate, 2, ' bb/100'),
+      hint: `All-in EV : ${formatNumber(stats.evWinrate, 2, ' bb/100')}`,
+      tone: toneOf(stats.winrate ?? 0),
+    },
+    {
+      label: 'Gains nets',
+      value: formatAmount(net, unit),
+      hint: mode === 'all' && unit === 'eur' ? `${hands} · ${tournaments}` : hands,
+      tone: toneOf(net),
+    },
+  ];
+}
+
+export function StatCards({ stats, unit, mode }: { stats: DashboardStats; unit: Unit; mode: StatsMode }) {
   return (
     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2.5fr)]">
-      <KeyStat
-        label="Winrate"
-        value={formatNumber(stats.winrate, 2, ' bb/100')}
-        hint={`All-in EV : ${formatNumber(stats.evWinrate, 2, ' bb/100')}`}
-        tone={toneOf(stats.winrate)}
-      />
-      <KeyStat
-        label="Gains nets"
-        value={formatAmount(net, unit)}
-        hint={`${stats.hands.toLocaleString('fr-FR')} mains jouées`}
-        tone={toneOf(net)}
-      />
+      {primaryStats(stats, unit, mode).map((s) => (
+        <KeyStat key={s.label} {...s} />
+      ))}
       <Card className="grid grid-cols-3 divide-x sm:grid-cols-6">
         <MiniStat label="VPIP" value={formatNumber(stats.vpip, 1, ' %')} hint="Argent mis volontairement préflop" />
         <MiniStat label="PFR" value={formatNumber(stats.pfr, 1, ' %')} hint="Relances préflop" />

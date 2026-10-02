@@ -1,5 +1,25 @@
 export type GameType = 'cash' | 'tournament' | 'expresso';
 
+/** Result of one tournament / Expresso, read from Winamax "summary" files. */
+export interface TournamentRecord {
+  /** Winamax tournament id (e.g. `1174072266`). */
+  id: string;
+  name: string;
+  gameType: Exclude<GameType, 'cash'>;
+  /** Same label as `HandRecord.limit` for tournaments ("0,25€", "Freeroll"). */
+  limit: string;
+  startTime: number;
+  endTime: number;
+  /** Total cost in € (buy-in + fee). */
+  buyIn: number;
+  /** Total € won. */
+  winnings: number;
+  position: number | null;
+  players: number | null;
+  finished: boolean;
+  sourceFile: string;
+}
+
 export interface HandRecord {
   /** Winamax HandId (e.g. `22989145-288-1790794436`). */
   id: string;

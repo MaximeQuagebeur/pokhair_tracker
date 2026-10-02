@@ -83,7 +83,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   /** Browser fallback (no Electron): one-shot import through a directory picker. */
   const importBrowserFiles = useCallback(async (list: FileList | null) => {
-    const files = [...(list ?? [])].filter((f) => f.name.toLowerCase().endsWith('.txt') && !/summary/i.test(f.name));
+    const files = [...(list ?? [])].filter((f) => f.name.toLowerCase().endsWith('.txt'));
     if (!files.length) return;
     setStatus('syncing');
     setError(null);

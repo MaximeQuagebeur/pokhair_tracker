@@ -1,6 +1,6 @@
 import { parseCards } from './cards';
 import { buildPots, expectedWinnings } from './equity';
-import type { GameType, HandRecord } from './types';
+import type { GameType, HandRecord, TournamentRecord } from './types';
 
 type Street = 'blinds' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'summary';
 
@@ -42,29 +42,82 @@ function formatEuro(value: number): string {
   return `${Number.isInteger(value) ? value : value.toFixed(2).replace('.', ',')}€`;
 }
 
+const sumEuros = (text: string) =>
+  (text.match(/[\d.,]+(?=\s*€)/g) ?? []).map(parseAmount).reduce((a, b) => a + b, 0);
+
+/** Tournament "limit" label shared by hands and summaries: total buy-in ("0,25€", "Freeroll"). */
+function buyInLabel(total: number): string {
+  return total > 0 ? formatEuro(Math.round(total * 100) / 100) : 'Freeroll';
+}
+
 /** Cash: "NL2", "PLO10"… ; tournaments: total buy-in ("1€", "Freeroll"). */
 function detectLimit(gameType: GameType, kind: string, game: string, bigBlind: number): string {
   if (gameType !== 'cash') {
     const buyIn = /buyIn:\s*(.+?)(?:\s+level:|$)/i.exec(kind)?.[1] ?? '';
-    const total = (buyIn.match(/[\d.,]+/g) ?? []).map(parseAmount).reduce((a, b) => a + b, 0);
-    return total > 0 ? formatEuro(Math.round(total * 100) / 100) : 'Freeroll';
+    return buyInLabel((buyIn.match(/[\d.,]+/g) ?? []).map(parseAmount).reduce((a, b) => a + b, 0));
   }
   const structure = /pot limit/i.test(game) ? 'PL' : /fixed limit/i.test(game) ? 'FL' : 'NL';
   const variant = /omaha\s*5/i.test(game) ? 'O5' : /omaha/i.test(game) ? 'O' : '';
   return `${structure}${variant}${Math.round(bigBlind * 100)}`;
 }
 
+const SUMMARY_PREFIX = 'Winamax Poker - Tournament summary';
+
+export function parseTournamentSummary(block: string, sourceFile = ''): TournamentRecord | null {
+  const lines = block.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const head = /^Winamax Poker - Tournament summary : (.+)\((\d+)\)/.exec(lines[0]);
+  if (!head) return null;
+  const find = (re: RegExp) => lines.map((l) => re.exec(l)).find(Boolean) ?? null;
+
+  const name = head[1].trim();
+  const buyIn = Math.round(sumEuros(find(/^Buy-In\s*:\s*(.+)$/i)?.[1] ?? '') * 100) / 100;
+  const started = find(/^Tournament started (\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})/i);
+  const startTime = started
+    ? Date.UTC(+started[1], +started[2] - 1, +started[3], +started[4], +started[5], +started[6])
+    : 0;
+  const played = find(/^You played (.+)$/i)?.[1] ?? '';
+  const duration =
+    (+(/(\d+)\s*h/.exec(played)?.[1] ?? 0) * 3600 +
+      +(/(\d+)\s*min/.exec(played)?.[1] ?? 0) * 60 +
+      +(/(\d+)\s*s\b/.exec(played)?.[1] ?? 0)) *
+    1000;
+  const position = find(/^You finished in (\d+)/i);
+  const won = find(/^You won (.+)$/i);
+  const players = find(/^Registered players\s*:\s*(\d+)/i);
+
+  return {
+    id: head[2],
+    name,
+    gameType: /expresso/i.test(name) ? 'expresso' : 'tournament',
+    limit: buyInLabel(buyIn),
+    startTime,
+    endTime: startTime + duration,
+    buyIn,
+    winnings: won ? Math.round(sumEuros(won[1]) * 100) / 100 : 0,
+    position: position ? +position[1] : null,
+    players: players ? +players[1] : null,
+    finished: !!position || !!won,
+    sourceFile,
+  };
+}
+
 export interface ParseResult {
   hands: HandRecord[];
+  tournaments: TournamentRecord[];
   errors: { handId?: string; message: string }[];
 }
 
 export function parseWinamaxFile(text: string, sourceFile: string): ParseResult {
-  const result: ParseResult = { hands: [], errors: [] };
-  const blocks = text.split(/^(?=Winamax Poker - )/m);
+  const result: ParseResult = { hands: [], tournaments: [], errors: [] };
+  const blocks = text.replace(/^\uFEFF/, '').split(/^(?=Winamax Poker - )/m);
   for (const block of blocks) {
     if (!block.startsWith('Winamax Poker - ')) continue;
     try {
+      if (block.startsWith(SUMMARY_PREFIX)) {
+        const tournament = parseTournamentSummary(block, sourceFile);
+        if (tournament) result.tournaments.push(tournament);
+        continue;
+      }
       const hand = parseHand(block, sourceFile);
       if (hand) result.hands.push(hand);
     } catch (err) {

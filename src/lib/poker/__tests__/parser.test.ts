@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { evaluate, parseCards } from '../cards';
 import { availableLimits, filterHands } from '../filters';
-import { computeStats } from '../stats';
+import { buildTournamentCurve, computeStats } from '../stats';
 import { parseWinamaxFile } from '../winamax-parser';
 
 const score = (s: string) => evaluate(parseCards(s));
@@ -195,7 +195,7 @@ describe('game types and limits', () => {
 
   it('filters by game and limit', () => {
     const all = [cash, expresso, freeroll];
-    expect(availableLimits(all, 'all')).toEqual(['NL2', '0,50€', 'Freeroll']);
+    expect(availableLimits(all, [], 'all')).toEqual(['NL2', '0,50€', 'Freeroll']);
     expect(filterHands(all, { date: 'all', game: 'expresso', limit: 'all' })).toEqual([expresso]);
     expect(filterHands(all, { date: 'all', game: 'all', limit: 'NL2' })).toEqual([cash]);
     expect(filterHands(all, { date: 'today', game: 'all', limit: 'all' }, new Date(2026, 9, 1, 23))).toHaveLength(2);
@@ -292,7 +292,42 @@ describe('real Winamax tournament histories', () => {
     expect(hand.allInEv).toBeGreaterThan(0);
   });
 
-  it('ignores tournament summary files', () => {
-    expect(parseWinamaxFile(TOURNAMENT_SUMMARY, 'summary.txt')).toEqual({ hands: [], errors: [] });
+  it('parses tournament summary files', () => {
+    const { hands, tournaments, errors } = parseWinamaxFile('\uFEFF' + TOURNAMENT_SUMMARY, 'summary.txt');
+    expect(hands).toEqual([]);
+    expect(errors).toEqual([]);
+    expect(tournaments[0]).toMatchObject({
+      id: '1174072266',
+      name: 'Monster Stack',
+      gameType: 'tournament',
+      limit: '0,25€',
+      buyIn: 0.25,
+      winnings: 0,
+      position: 42,
+      players: 78,
+      finished: true,
+      startTime: Date.UTC(2026, 8, 25, 6, 30, 0),
+      endTime: Date.UTC(2026, 8, 25, 8, 18, 59),
+    });
+  });
+
+  it('computes ROI, ITM and € curves from summaries', () => {
+    const lost = parseWinamaxFile(TOURNAMENT_SUMMARY, 's1.txt').tournaments[0];
+    const won = parseWinamaxFile(
+      TOURNAMENT_SUMMARY.replace('Monster Stack(1174072266)', 'Expresso(55)').replace(
+        'You finished in 42th place',
+        'You finished in 1st place\nYou won 0.75€',
+      ),
+      's2.txt',
+    ).tournaments[0];
+    expect(won).toMatchObject({ gameType: 'expresso', winnings: 0.75, position: 1 });
+
+    const stats = computeStats([], [lost, won]);
+    expect(stats.tournaments).toBe(2);
+    expect(stats.net).toBeCloseTo(0.25, 4);
+    expect(stats.roi).toBeCloseTo(50, 4);
+    expect(stats.itm).toBe(50);
+    expect(stats.winrate).toBeNull();
+    expect(buildTournamentCurve([lost, won]).map((p) => p.net)).toEqual([0, -0.25, 0.25]);
   });
 });

@@ -1,4 +1,4 @@
-import type { GameType, HandRecord } from './types';
+import type { GameType, HandRecord, TournamentRecord } from './types';
 
 export type DateRange = 'today' | 'yesterday' | 'month' | 'year' | 'all';
 export type GameFilter = 'all' | GameType;
@@ -55,13 +55,34 @@ export function filterHands(hands: HandRecord[], filters: HandFilters, now = new
   );
 }
 
+export function filterTournaments(
+  tournaments: TournamentRecord[],
+  filters: HandFilters,
+  now = new Date(),
+): TournamentRecord[] {
+  const [start, end] = dateBounds(filters.date, now);
+  return tournaments.filter(
+    (t) =>
+      t.startTime >= start &&
+      t.startTime < end &&
+      (filters.game === 'all' || t.gameType === filters.game) &&
+      (filters.limit === 'all' || t.limit === filters.limit),
+  );
+}
+
 const GAME_ORDER: Record<GameType, number> = { cash: 0, expresso: 1, tournament: 2 };
 const limitValue = (limit: string) => Number.parseFloat(limit.replace(/^\D+/, '').replace(',', '.')) || 0;
 
-/** Distinct limits present in `hands` for the selected game, sorted by game then stake. */
-export function availableLimits(hands: HandRecord[], game: GameFilter): string[] {
+/** Distinct limits present in hands and tournaments for the selected game, sorted by game then stake. */
+export function availableLimits(
+  hands: HandRecord[],
+  tournaments: TournamentRecord[],
+  game: GameFilter,
+): string[] {
   const limits = new Map<string, GameType>();
-  for (const h of hands) if (game === 'all' || h.gameType === game) limits.set(h.limit, h.gameType);
+  for (const item of [...hands, ...tournaments]) {
+    if (game === 'all' || item.gameType === game) limits.set(item.limit, item.gameType);
+  }
   return [...limits.entries()]
     .sort(([a, ga], [b, gb]) => GAME_ORDER[ga] - GAME_ORDER[gb] || limitValue(a) - limitValue(b) || a.localeCompare(b))
     .map(([limit]) => limit);

@@ -46,6 +46,7 @@ function ThemeSelector() {
 export default function SettingsPage() {
   const { folder, isDesktop, status, chooseFolder, resync } = useSync();
   const handCount = useLiveQuery(() => db.hands.count(), []);
+  const tournamentCount = useLiveQuery(() => db.tournaments.count(), []);
   const fileCount = useLiveQuery(() => db.files.count(), []);
   const busy = status === 'syncing';
 
@@ -94,7 +95,8 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>Base de données locale</CardTitle>
           <CardDescription>
-            {(handCount ?? 0).toLocaleString('fr-FR')} mains · {(fileCount ?? 0).toLocaleString('fr-FR')} fichiers
+            {(handCount ?? 0).toLocaleString('fr-FR')} mains · {(tournamentCount ?? 0).toLocaleString('fr-FR')}{' '}
+            tournois · {(fileCount ?? 0).toLocaleString('fr-FR')} fichiers
             analysés
           </CardDescription>
         </CardHeader>
