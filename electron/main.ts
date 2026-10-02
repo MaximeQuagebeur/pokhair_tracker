@@ -134,6 +134,8 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Packaged builds get their icon from electron-builder; only the dev Dock needs it.
+  if (isDev && process.platform === 'darwin') app.dock?.setIcon(path.join(__dirname, '..', 'build', 'icon.png'));
   registerAppProtocol();
   registerIpc();
   createWindow();

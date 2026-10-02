@@ -52,7 +52,7 @@ export function PerformanceChart({ data, unit }: { data: CurvePoint[]; unit: Uni
           ))}
         </div>
       </CardHeader>
-      <CardContent className="h-[420px]">
+      <CardContent className="h-[520px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />

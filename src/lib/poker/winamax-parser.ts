@@ -1,11 +1,11 @@
 import { parseCards } from './cards';
 import { buildPots, expectedWinnings } from './equity';
-import type { HandRecord } from './types';
+import type { GameType, HandRecord } from './types';
 
 type Street = 'blinds' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'summary';
 
 const HEADER_RE =
-  /^Winamax Poker - (\S+) - HandId: #([\w-]+) - (.+?) \(([^)]*)\) - (\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})/;
+  /^Winamax Poker - (.+?) - HandId: #([\w-]+) - (.+?) \(([^)]*)\) - (\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})/;
 const TABLE_RE = /^Table: '(.+?)'/;
 const SEAT_RE = /^Seat \d+: (.+) \([\d.,]+\s*€?[^)]*\)$/;
 const DEALT_RE = /^Dealt to (.+?) \[([^\]]+)\]/;
@@ -31,6 +31,28 @@ export function parseAmount(raw: string): number {
 }
 
 const round = (n: number) => Math.round(n * 10000) / 10000;
+
+function detectGameType(kind: string): GameType {
+  if (/expresso/i.test(kind)) return 'expresso';
+  if (/tournament/i.test(kind)) return 'tournament';
+  return 'cash';
+}
+
+function formatEuro(value: number): string {
+  return `${Number.isInteger(value) ? value : value.toFixed(2).replace('.', ',')}€`;
+}
+
+/** Cash: "NL2", "PLO10"… ; tournaments: total buy-in ("1€", "Freeroll"). */
+function detectLimit(gameType: GameType, kind: string, game: string, bigBlind: number): string {
+  if (gameType !== 'cash') {
+    const buyIn = /buyIn:\s*(.+?)(?:\s+level:|$)/i.exec(kind)?.[1] ?? '';
+    const total = (buyIn.match(/[\d.,]+/g) ?? []).map(parseAmount).reduce((a, b) => a + b, 0);
+    return total > 0 ? formatEuro(Math.round(total * 100) / 100) : 'Freeroll';
+  }
+  const structure = /pot limit/i.test(game) ? 'PL' : /fixed limit/i.test(game) ? 'FL' : 'NL';
+  const variant = /omaha\s*5/i.test(game) ? 'O5' : /omaha/i.test(game) ? 'O' : '';
+  return `${structure}${variant}${Math.round(bigBlind * 100)}`;
+}
 
 export interface ParseResult {
   hands: HandRecord[];
@@ -59,10 +81,14 @@ function add(map: Map<string, number>, key: string, value: number) {
 export function parseHand(block: string, sourceFile = ''): HandRecord | null {
   const lines = block.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const header = HEADER_RE.exec(lines[0]);
-  if (!header || header[1] !== 'CashGame') return null;
+  if (!header) return null;
 
-  const [, , id, game, stakes, y, mo, d, h, mi, s] = header;
-  const blinds = (stakes.match(/[\d.,]+/g) ?? []).map(parseAmount);
+  const [, kind, id, game, stakes, y, mo, d, h, mi, s] = header;
+  const gameType = detectGameType(kind);
+  const amounts = (stakes.match(/[\d.,]+/g) ?? []).map(parseAmount);
+  // Tournaments with ante list three values (ante/sb/bb): the two largest are the blinds.
+  const blinds = amounts.length > 2 ? [...amounts].sort((a, b) => b - a).slice(0, 2).reverse() : amounts;
+  const bigBlind = blinds[1] ?? blinds[0] ?? 0;
   const timestamp = Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
 
   let table = '';
@@ -283,8 +309,10 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
     timestamp,
     table,
     game,
+    gameType,
+    limit: detectLimit(gameType, kind, game, bigBlind),
     smallBlind: blinds[0] ?? 0,
-    bigBlind: blinds[1] ?? blinds[0] ?? 0,
+    bigBlind,
     hero,
     heroCards: heroCardsRaw,
     net,

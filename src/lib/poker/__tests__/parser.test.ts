@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { evaluate, parseCards } from '../cards';
+import { availableLimits, filterHands } from '../filters';
 import { computeStats } from '../stats';
 import { parseWinamaxFile } from '../winamax-parser';
 
@@ -145,5 +146,153 @@ describe('parseWinamaxFile', () => {
     expect(stats.wtsd).toBe(50);
     expect(stats.wsd).toBe(0);
     expect(stats.winrate).toBeCloseTo(((0.07 - 2 + 0.09) / 0.02) / 0.03, 4);
+  });
+});
+
+const EXPRESSO_HAND = `Winamax Poker - Tournament "Expresso" buyIn: 0.46€ + 0.04€ level: 2 - HandId: #2384917-12-1790800000 - Holdem no limit (10/20/40) - 2026/10/01 20:00:00 UTC
+Table: 'Expresso(123456789)#0' 3-max (real money) Seat #1 is the button
+Seat 1: MaxDr644 (500)
+Seat 2: Villain (500)
+Seat 3: Other (500)
+*** ANTE/BLINDS ***
+MaxDr644 posts ante 10
+Villain posts ante 10
+Other posts ante 10
+Villain posts small blind 20
+Other posts big blind 40
+Dealt to MaxDr644 [As Kd]
+*** PRE-FLOP ***
+MaxDr644 raises 40 to 80
+Villain folds
+Other folds
+MaxDr644 collected 170 from pot
+*** SUMMARY ***
+Total pot 170 | No rake
+Seat 1: MaxDr644 (button) won 170
+`;
+
+const TOURNAMENT_HEADER = `Winamax Poker - Tournament "Freeroll" buyIn: 0€ + 0€ level: 1 - HandId: #999-1-1790800001 - Holdem no limit (10/20) - 2026/10/01 20:05:00 UTC`;
+
+describe('game types and limits', () => {
+  const cash = parseWinamaxFile(SIMPLE_HAND, 'cash.txt').hands[0];
+  const expresso = parseWinamaxFile(EXPRESSO_HAND, 'expresso.txt').hands[0];
+  const freeroll = parseWinamaxFile(
+    EXPRESSO_HAND.replace(/^.*\n/, TOURNAMENT_HEADER + '\n').replace(/\(10\/20\/40\)/, '(10/20)'),
+    'mtt.txt',
+  ).hands[0];
+
+  it('classifies games and limits', () => {
+    expect(cash).toMatchObject({ gameType: 'cash', limit: 'NL2' });
+    expect(expresso).toMatchObject({ gameType: 'expresso', limit: '0,50€', smallBlind: 20, bigBlind: 40 });
+    expect(freeroll).toMatchObject({ gameType: 'tournament', limit: 'Freeroll' });
+  });
+
+  it('computes tournament results in chips', () => {
+    // Hero invested ante 10 + raise 80, uncalled 40 returned, collected 170.
+    expect(expresso.net).toBe(170 - 90);
+    expect(computeStats([cash, expresso]).net).toBeCloseTo(0.07, 4);
+  });
+
+  it('filters by game and limit', () => {
+    const all = [cash, expresso, freeroll];
+    expect(availableLimits(all, 'all')).toEqual(['NL2', '0,50€', 'Freeroll']);
+    expect(filterHands(all, { date: 'all', game: 'expresso', limit: 'all' })).toEqual([expresso]);
+    expect(filterHands(all, { date: 'all', game: 'all', limit: 'NL2' })).toEqual([cash]);
+    expect(filterHands(all, { date: 'today', game: 'all', limit: 'all' }, new Date(2026, 9, 1, 23))).toHaveLength(2);
+  });
+});
+
+const MONSTER_STACK = `Winamax Poker - Tournament "Monster Stack" buyIn: 0.22€ + 0.03€ level: 8 - HandId: #5042601985610612742-80-1790323902 - Holdem no limit (400/1750/3500) - 2026/09/25 08:11:42 UTC
+Table: 'Monster Stack(1174072266)#0005' 6-max (real money) Seat #1 is the button
+Seat 1: nouma29 (200888)
+Seat 2: waiKKy (251854)
+Seat 3: Not you man (98100)
+Seat 4: JAILESAA7 (264445)
+Seat 5: terne oie117 (188930)
+Seat 6: MaxDr644 (100000)
+*** ANTE/BLINDS ***
+waiKKy posts ante 400
+Not you man posts ante 400
+nouma29 posts ante 400
+JAILESAA7 posts ante 400
+terne oie117 posts ante 400
+MaxDr644 posts ante 400
+waiKKy posts small blind 1750
+Not you man posts big blind 3500
+Dealt to MaxDr644 [5c 3d]
+*** PRE-FLOP *** 
+JAILESAA7 raises 3500 to 7000
+terne oie117 folds
+MaxDr644 folds
+nouma29 folds
+waiKKy folds
+Not you man folds
+JAILESAA7 collected 14650 from pot
+*** SUMMARY ***
+Total pot 14650 | No rake
+Seat 4: JAILESAA7 won 14650
+`;
+
+const EXPRESSO_FREEROLL = `Winamax Poker - Tournament "Expresso Nitro Freeroll" buyIn: 0€ + 0€ level: 1 - HandId: #5125739469990789121-1-1790784621 - Holdem no limit (10/20) - 2026/09/30 16:10:21 UTC
+Table: 'Expresso Nitro Freeroll(1193429220)#0' 3-max (real money) Seat #3 is the button
+Seat 1: Acham974 (300)
+Seat 2: franc5733876 (300)
+Seat 3: MaxDr644 (300)
+*** ANTE/BLINDS ***
+Acham974 posts small blind 10
+franc5733876 posts big blind 20
+Dealt to MaxDr644 [4h Ah]
+*** PRE-FLOP *** 
+MaxDr644 raises 280 to 300 and is all-in
+Acham974 calls 290 and is all-in
+franc5733876 folds
+*** FLOP *** [2c Jh Th]
+*** TURN *** [2c Jh Th][Ts]
+*** RIVER *** [2c Jh Th Ts][4c]
+*** SHOW DOWN ***
+MaxDr644 shows [4h Ah] (Two pairs : Tens and 4)
+Acham974 shows [Jd 4s] (Two pairs : Jacks and Tens)
+Acham974 collected 620 from pot
+*** SUMMARY ***
+Total pot 620 | No rake
+Board: [2c Jh Th Ts 4c]
+Seat 1: Acham974 (small blind) showed [Jd 4s] and won 620 with Two pairs : Jacks and Tens
+Seat 3: MaxDr644 (button) showed [4h Ah] and lost with Two pairs : Tens and 4
+`;
+
+const TOURNAMENT_SUMMARY = `Winamax Poker - Tournament summary : Monster Stack(1174072266) - Late Registration
+Player : MaxDr644
+Buy-In : 0.22€ + 0.03€
+Registered players : 78
+Prizepool : 22.44€
+Tournament started 2026/09/25 06:30:00 UTC
+You played 1h 48min 59s 
+You finished in 42th place
+`;
+
+describe('real Winamax tournament histories', () => {
+  it('parses a Monster Stack hand with antes', () => {
+    const { hands, errors } = parseWinamaxFile(MONSTER_STACK, 'mtt.txt');
+    expect(errors).toEqual([]);
+    expect(hands[0]).toMatchObject({
+      gameType: 'tournament',
+      limit: '0,25€',
+      smallBlind: 1750,
+      bigBlind: 3500,
+      net: -400,
+      vpip: false,
+      sawFlop: false,
+    });
+  });
+
+  it('parses an Expresso all-in with EV', () => {
+    const hand = parseWinamaxFile(EXPRESSO_FREEROLL, 'expresso.txt').hands[0];
+    expect(hand).toMatchObject({ gameType: 'expresso', limit: 'Freeroll', net: -300, showdown: true, allInAdjusted: true });
+    // A4s vs J4o preflop: hero is a solid favourite in a 620 pot.
+    expect(hand.allInEv).toBeGreaterThan(0);
+  });
+
+  it('ignores tournament summary files', () => {
+    expect(parseWinamaxFile(TOURNAMENT_SUMMARY, 'summary.txt')).toEqual({ hands: [], errors: [] });
   });
 });

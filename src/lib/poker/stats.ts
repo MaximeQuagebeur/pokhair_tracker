@@ -20,6 +20,9 @@ export interface DashboardStats {
 
 const pct = (num: number, den: number) => (den > 0 ? (num / den) * 100 : null);
 
+/** Tournament amounts are chips: they count in BB but never in €. */
+export const isMoneyHand = (h: HandRecord) => h.gameType === 'cash';
+
 export function computeStats(hands: HandRecord[]): DashboardStats {
   let net = 0;
   let netBB = 0;
@@ -36,8 +39,10 @@ export function computeStats(hands: HandRecord[]): DashboardStats {
   let wonSd = 0;
 
   for (const h of hands) {
-    net += h.net;
-    ev += h.allInEv;
+    if (isMoneyHand(h)) {
+      net += h.net;
+      ev += h.allInEv;
+    }
     if (h.bigBlind > 0) {
       netBB += h.net / h.bigBlind;
       evBB += h.allInEv / h.bigBlind;
@@ -87,11 +92,11 @@ export function buildCurves(hands: HandRecord[], unit: Unit, maxPoints = 1500): 
   let sd = 0;
   let nsd = 0;
   hands.forEach((h, i) => {
-    const div = unit === 'bb' ? h.bigBlind || 1 : 1;
-    net += h.net / div;
-    ev += h.allInEv / div;
-    if (h.showdown) sd += h.net / div;
-    else nsd += h.net / div;
+    const factor = unit === 'bb' ? 1 / (h.bigBlind || 1) : isMoneyHand(h) ? 1 : 0;
+    net += h.net * factor;
+    ev += h.allInEv * factor;
+    if (h.showdown) sd += h.net * factor;
+    else nsd += h.net * factor;
     if ((i + 1) % step === 0 || i === hands.length - 1) {
       points.push({ hand: i + 1, net, ev, showdown: sd, nonShowdown: nsd });
     }

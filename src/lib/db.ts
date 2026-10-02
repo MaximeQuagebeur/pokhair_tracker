@@ -19,6 +19,13 @@ class PokhairDB extends Dexie {
       hands: 'id, timestamp, hero, sourceFile',
       files: 'path',
     });
+    // v2 parses every game type: force a full re-import.
+    this.version(2)
+      .stores({ hands: 'id, timestamp, hero, sourceFile, gameType, limit', files: 'path' })
+      .upgrade(async (tx) => {
+        await tx.table('hands').clear();
+        await tx.table('files').clear();
+      });
   }
 }
 

@@ -41,7 +41,7 @@ function SyncIndicator() {
 export function TopBar() {
   const { folder, status, isDesktop, chooseFolder, resync } = useSync();
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b px-6">
+    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4">
       <SyncIndicator />
       <div className="flex min-w-0 items-center gap-2">
         {folder && (

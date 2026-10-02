@@ -1,3 +1,5 @@
+export type GameType = 'cash' | 'tournament' | 'expresso';
+
 export interface HandRecord {
   /** Winamax HandId (e.g. `22989145-288-1790794436`). */
   id: string;
@@ -5,11 +7,14 @@ export interface HandRecord {
   timestamp: number;
   table: string;
   game: string;
+  gameType: GameType;
+  /** Cash: "NL2", "PLO10"… ; tournaments: total buy-in ("1€", "Freeroll"). */
+  limit: string;
   smallBlind: number;
   bigBlind: number;
   hero: string;
   heroCards: string[];
-  /** Net won in currency: collected - invested. */
+  /** Net won (€ for cash, chips for tournaments): collected - invested. */
   net: number;
   /** All-in adjusted expected net (equals `net` when no pre-river all-in). */
   allInEv: number;
