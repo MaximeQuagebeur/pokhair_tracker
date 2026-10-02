@@ -70,7 +70,10 @@ export function parseTournamentSummary(block: string, sourceFile = ''): Tourname
   const find = (re: RegExp) => lines.map((l) => re.exec(l)).find(Boolean) ?? null;
 
   const name = head[1].trim();
-  const buyIn = Math.round(sumEuros(find(/^Buy-In\s*:\s*(.+)$/i)?.[1] ?? '') * 100) / 100;
+  const buyInText = find(/^Buy-In\s*:\s*(.+)$/i)?.[1] ?? '';
+  // Play-money summaries list amounts without "€" (freerolls still show "0€ + 0€").
+  if (/\d/.test(buyInText) && !buyInText.includes('€')) return null;
+  const buyIn = Math.round(sumEuros(buyInText) * 100) / 100;
   const started = find(/^Tournament started (\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})/i);
   const startTime = started
     ? Date.UTC(+started[1], +started[2] - 1, +started[3], +started[4], +started[5], +started[6])
@@ -217,6 +220,7 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
     }
 
     if (!sortedNames.length) {
+      if (/^Table: .*\(play money\)/i.test(line)) return null;
       const t = TABLE_RE.exec(line);
       if (t) table = t[1];
       const seat = SEAT_RE.exec(line);

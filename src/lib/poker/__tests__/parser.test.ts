@@ -373,6 +373,12 @@ describe('net won by game type', () => {
     expect(view('expresso').roi).toBeCloseTo(0, 4);
   });
 
+  it('ignores play money', () => {
+    const playHand = EXPRESSO_HAND.replace('(real money)', '(play money)');
+    const playSummary = EXPRESSO_SUMMARY('3', null).replace('0.46€ + 0.04€', '1.86 + 0.14');
+    expect(parseWinamaxFile(playHand + '\n' + playSummary, 'x_play_.txt')).toMatchObject({ hands: [], tournaments: [] });
+  });
+
   it('global: cash + tournaments', () => {
     expect(view('all').net).toBeCloseTo(0.07, 4);
     const curve = buildCurves(hands, tournaments, 'eur');

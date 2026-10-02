@@ -45,10 +45,12 @@ class PokhairDB extends Dexie {
       .upgrade(async (tx) => {
         await tx.table('files').clear();
       });
-    // v5 stores invested / collected / net explicitly: re-scan every file.
+    // v5 stores invested / collected / net explicitly and drops play money: rebuild everything.
     this.version(5)
       .stores({})
       .upgrade(async (tx) => {
+        await tx.table('hands').clear();
+        await tx.table('tournaments').clear();
         await tx.table('files').clear();
       });
   }
