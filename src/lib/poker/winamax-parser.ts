@@ -1,13 +1,15 @@
 import { parseCards } from './cards';
 import { buildPots, expectedWinnings } from './equity';
-import type { GameType, HandRecord, TournamentRecord } from './types';
+import { assignPositions, STEAL_POSITIONS } from './positions';
+import type { EndStreet, GameType, HandRecord, HandText, TournamentRecord } from './types';
 
 type Street = 'blinds' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'summary';
 
 const HEADER_RE =
   /^Winamax Poker - (.+?) - HandId: #([\w-]+) - (.+?) \(([^)]*)\) - (\d{4})\/(\d{2})\/(\d{2}) (\d{2}):(\d{2}):(\d{2})/;
 const TABLE_RE = /^Table: '(.+?)'/;
-const SEAT_RE = /^Seat \d+: (.+) \([\d.,]+\s*€?[^)]*\)$/;
+const BUTTON_RE = /Seat #(\d+) is the button/;
+const SEAT_RE = /^Seat (\d+): (.+) \([\d.,]+\s*€?[^)]*\)$/;
 const DEALT_RE = /^Dealt to (.+?) \[([^\]]+)\]/;
 const CARDS_GROUP_RE = /\[([^\]]+)\]/g;
 const AMOUNT = '([\\d.,]+)\\s*€?';
@@ -24,6 +26,7 @@ const ACTION_RES: [string, RegExp][] = [
   ['show', /^shows \[([^\]]+)\]/],
   ['collect', new RegExp(`^collected ${AMOUNT}`)],
 ];
+const PREFLOP_LETTERS: Record<string, string> = { fold: 'F', check: 'X', call: 'C', raise: 'R' };
 
 export function parseAmount(raw: string): number {
   const normalized = raw.includes('.') ? raw.replace(/,/g, '') : raw.replace(',', '.');
@@ -108,12 +111,13 @@ export function parseTournamentSummary(block: string, sourceFile = ''): Tourname
 
 export interface ParseResult {
   hands: HandRecord[];
+  texts: HandText[];
   tournaments: TournamentRecord[];
   errors: { handId?: string; message: string }[];
 }
 
 export function parseWinamaxFile(text: string, sourceFile: string): ParseResult {
-  const result: ParseResult = { hands: [], tournaments: [], errors: [] };
+  const result: ParseResult = { hands: [], texts: [], tournaments: [], errors: [] };
   const blocks = text.replace(/^\uFEFF/, '').split(/^(?=Winamax Poker - )/m);
   for (const block of blocks) {
     if (!block.startsWith('Winamax Poker - ')) continue;
@@ -124,7 +128,10 @@ export function parseWinamaxFile(text: string, sourceFile: string): ParseResult 
         continue;
       }
       const hand = parseHand(block, sourceFile);
-      if (hand) result.hands.push(hand);
+      if (hand) {
+        result.hands.push(hand);
+        result.texts.push({ id: hand.id, text: block.trim() });
+      }
     } catch (err) {
       result.errors.push({ handId: HEADER_RE.exec(block)?.[2], message: (err as Error).message });
     }
@@ -150,7 +157,18 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
   const timestamp = Date.UTC(+y, +mo - 1, +d, +h, +mi, +s);
 
   let table = '';
+  let buttonSeat = 0;
   const seated: string[] = [];
+  const seatNumbers = new Map<string, number>();
+  let smallBlindPlayer: string | undefined;
+  let bigBlindPlayer: string | undefined;
+  let totalPot: number | null = null;
+  let endStreet: EndStreet = 'preflop';
+  let preflopActions = '';
+  let preflopCalls = 0;
+  let heroOpenedFirstIn = false;
+  let heroOpenRaised = false;
+  let foldToThreeBet = false;
   const participants = new Set<string>();
   const contrib = new Map<string, number>();
   let streetContrib = new Map<string, number>();
@@ -199,6 +217,7 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
       board = [...line.matchAll(CARDS_GROUP_RE)].flatMap((m) => parseCards(m[1]));
     }
     if (next === 'showdown') hadShowdown = true;
+    if (next === 'flop' || next === 'turn' || next === 'river' || next === 'showdown') endStreet = next;
     street = next;
   };
 
@@ -222,15 +241,24 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
     if (!sortedNames.length) {
       if (/^Table: .*\(play money\)/i.test(line)) return null;
       const t = TABLE_RE.exec(line);
-      if (t) table = t[1];
+      if (t) {
+        table = t[1];
+        buttonSeat = +(BUTTON_RE.exec(line)?.[1] ?? 0);
+      }
       const seat = SEAT_RE.exec(line);
-      if (seat) seated.push(seat[1]);
+      if (seat) {
+        seated.push(seat[2]);
+        seatNumbers.set(seat[2], +seat[1]);
+      }
       continue;
     }
 
     if (street === 'summary') {
-      const pot = /^Total pot [\d.,]+\s*€?\s*\|\s*(?:Rake ([\d.,]+)|No rake)/i.exec(line);
-      if (pot) rake = pot[1] ? parseAmount(pot[1]) : 0;
+      const pot = /^Total pot ([\d.,]+)\s*€?\s*\|\s*(?:Rake ([\d.,]+)|No rake)/i.exec(line);
+      if (pot) {
+        totalPot = parseAmount(pot[1]);
+        rake = pot[2] ? parseAmount(pot[2]) : 0;
+      }
       const seatLine = /^Seat \d+: (.+)$/.exec(line);
       if (seatLine) {
         const name = sortedNames.find((n) => seatLine[1].startsWith(n + ' ') || seatLine[1] === n);
@@ -270,6 +298,12 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
         stats.threeBetOpportunity = true;
         if (kind === 'raise') stats.threeBet = true;
       }
+      if (heroOpenRaised && preflopRaises === 2 && lastRaiser !== hero && kind === 'fold') foldToThreeBet = true;
+      if (kind === 'raise' && preflopRaises === 0) {
+        heroOpenRaised = true;
+        heroOpenedFirstIn = !preflopActions && preflopCalls === 0;
+      }
+      preflopActions += PREFLOP_LETTERS[kind];
     }
 
     switch (kind) {
@@ -279,6 +313,8 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
         const amount = parseAmount(m[1]);
         add(contrib, player, amount);
         add(streetContrib, player, amount);
+        if (kind === 'sb') smallBlindPlayer ??= player;
+        if (kind === 'bb') bigBlindPlayer ??= player;
         break;
       }
       case 'ante':
@@ -293,6 +329,7 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
         const amount = parseAmount(m[1]);
         add(contrib, player, amount);
         add(streetContrib, player, amount);
+        if (kind === 'call' && preflop) preflopCalls++;
         if (isHero) {
           if (preflop) stats.vpip = true;
           else if (kind === 'call') stats.postflopCalls++;
@@ -332,6 +369,13 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
   const heroCollected = round(winnings.get(hero) ?? 0);
   const net = round(heroCollected - heroInvested);
   const showdown = hadShowdown && !folded.has(hero);
+  const positions = assignPositions(
+    seated.filter((p) => participants.has(p)).map((name) => ({ name, seat: seatNumbers.get(name) ?? 0 })),
+    buttonSeat,
+    smallBlindPlayer,
+    bigBlindPlayer,
+  );
+  const heroPosition = positions.get(hero) ?? null;
 
   let allInEv = net;
   let allInAdjusted = false;
@@ -375,6 +419,12 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
     wonAtShowdown: showdown && (winnings.get(hero) ?? 0) > 0,
     sawFlop: board.length >= 3 && !heroFoldedPreflop,
     ...stats,
+    heroPosition,
+    pot: round(totalPot ?? [...contrib.values()].reduce((a, b) => a + b, 0)),
+    endStreet,
+    preflopActions,
+    steal: heroOpenedFirstIn && !!heroPosition && STEAL_POSITIONS.includes(heroPosition),
+    foldToThreeBet,
     sourceFile,
   };
 }

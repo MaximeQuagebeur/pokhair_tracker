@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import { parseWinamaxFile } from './poker/winamax-parser';
-import type { HandRecord, TournamentRecord } from './poker/types';
+import type { HandRecord, HandText, TournamentRecord } from './poker/types';
 
 export interface FileRecord {
   path: string;
@@ -13,6 +13,7 @@ export interface FileRecord {
 
 class PokhairDB extends Dexie {
   hands!: Table<HandRecord, string>;
+  handTexts!: Table<HandText, string>;
   tournaments!: Table<TournamentRecord, string>;
   files!: Table<FileRecord, string>;
 
@@ -53,6 +54,14 @@ class PokhairDB extends Dexie {
         await tx.table('tournaments').clear();
         await tx.table('files').clear();
       });
+    // v6 adds positions / replayer fields and stores the raw text of each hand: rebuild everything.
+    this.version(6)
+      .stores({ handTexts: 'id' })
+      .upgrade(async (tx) => {
+        await tx.table('hands').clear();
+        await tx.table('tournaments').clear();
+        await tx.table('files').clear();
+      });
   }
 }
 
@@ -60,10 +69,11 @@ export const db = new PokhairDB();
 
 /** Parses a history file and upserts its hands / tournament results (idempotent by id). */
 export async function ingestFile(file: { path: string; size: number; mtimeMs: number }, text: string) {
-  const { hands, tournaments, errors } = parseWinamaxFile(text, file.path);
+  const { hands, texts, tournaments, errors } = parseWinamaxFile(text, file.path);
   if (errors.length) console.warn(`[parser] ${file.path}`, errors);
-  await db.transaction('rw', db.hands, db.tournaments, db.files, async () => {
+  await db.transaction('rw', [db.hands, db.handTexts, db.tournaments, db.files], async () => {
     await db.hands.bulkPut(hands);
+    await db.handTexts.bulkPut(texts);
     await db.tournaments.bulkPut(tournaments);
     await db.files.put({ ...file, hands: hands.length, tournaments: tournaments.length, parsedAt: Date.now() });
   });
@@ -71,8 +81,9 @@ export async function ingestFile(file: { path: string; size: number; mtimeMs: nu
 }
 
 export async function clearDatabase() {
-  await db.transaction('rw', db.hands, db.tournaments, db.files, async () => {
+  await db.transaction('rw', [db.hands, db.handTexts, db.tournaments, db.files], async () => {
     await db.hands.clear();
+    await db.handTexts.clear();
     await db.tournaments.clear();
     await db.files.clear();
   });

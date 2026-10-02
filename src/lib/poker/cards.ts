@@ -17,6 +17,14 @@ export function cardToString(card: number): string {
   return RANKS[card >> 2] + SUITS[card & 3];
 }
 
+export const SUIT_SYMBOLS: Record<string, string> = { c: '♣', d: '♦', h: '♥', s: '♠' };
+
+/** "Td" -> "10♦". */
+export function prettyCard(token: string): string {
+  const rank = token[0]?.toUpperCase() === 'T' ? '10' : (token[0]?.toUpperCase() ?? '');
+  return rank + (SUIT_SYMBOLS[token[1]?.toLowerCase()] ?? '');
+}
+
 function straightHigh(rankMask: number): number {
   // Bit 0 = ace-low, bit r+1 = rank r.
   const ext = (rankMask << 1) | ((rankMask >> 12) & 1);

@@ -11,7 +11,7 @@ export interface AppModule {
 /** Register new modules here: the sidebar is generated from this list. */
 export const MODULES: AppModule[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, enabled: true },
-  { href: '/replayer', label: 'Replayer', icon: PlayCircle, enabled: false },
+  { href: '/hands', label: 'Mains & Replayer', icon: PlayCircle, enabled: true },
   { href: '/leakfinder', label: 'Leakfinder', icon: SearchCheck, enabled: false },
   { href: '/hud', label: 'HUD', icon: Crosshair, enabled: false },
 ];

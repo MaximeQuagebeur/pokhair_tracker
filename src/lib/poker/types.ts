@@ -1,4 +1,13 @@
 export type GameType = 'cash' | 'tournament' | 'expresso';
+export type Position = 'UTG' | 'MP' | 'CO' | 'BTN' | 'SB' | 'BB';
+/** Last street of the hand ('showdown' when cards were shown down). */
+export type EndStreet = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
+
+/** Original Winamax text of a hand, used by the replayer. */
+export interface HandText {
+  id: string;
+  text: string;
+}
 
 /** Result of one tournament / Expresso, read from Winamax "summary" files. */
 export interface TournamentRecord {
@@ -57,5 +66,14 @@ export interface HandRecord {
   postflopBets: number;
   postflopRaises: number;
   postflopCalls: number;
+  heroPosition: Position | null;
+  /** Winamax "Total pot" (rake included). */
+  pot: number;
+  endStreet: EndStreet;
+  /** Hero preflop actions, one letter each: F fold, X check, C call, R raise (e.g. "RC"). */
+  preflopActions: string;
+  /** Hero open-raised first in from CO / BTN / SB. */
+  steal: boolean;
+  foldToThreeBet: boolean;
   sourceFile: string;
 }

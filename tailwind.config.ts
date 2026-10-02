@@ -23,6 +23,15 @@ const config: Config = {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      keyframes: {
+        deal: {
+          '0%': { opacity: '0', transform: 'translateY(-18px) scale(0.8)' },
+          '100%': { opacity: '1', transform: 'none' },
+        },
+      },
+      animation: {
+        deal: 'deal 0.35s ease-out both',
+      },
     },
   },
   plugins: [],

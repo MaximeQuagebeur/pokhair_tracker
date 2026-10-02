@@ -13,6 +13,11 @@ export function formatAmount(value: number, unit: Unit) {
   return unit === 'eur' ? eur.format(value) : `${num.format(value)} bb`;
 }
 
+/** € for cash games, chips for tournaments. */
+export function formatStake(value: number, isCash: boolean) {
+  return isCash ? eur.format(value) : num.format(Math.round(value));
+}
+
 export function formatNumber(value: number | null, digits = 1, suffix = '') {
   if (value === null || !Number.isFinite(value)) return '—';
   return value.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits }) + suffix;
