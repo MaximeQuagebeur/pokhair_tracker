@@ -1,5 +1,6 @@
 appId: com.pokhair.tracker
-productName: Pok'Hair Tracker
+# Must stay file-safe (no apostrophe): also determines the userData folder holding the database.
+productName: Pokhair Tracker
 directories:
   output: dist
 files:
@@ -10,6 +11,8 @@ asar: true
 artifactName: pokhair-tracker-${version}-${os}-${arch}.${ext}
 mac:
   category: public.app-category.utilities
+  extendInfo:
+    CFBundleDisplayName: Pok'Hair Tracker
   # Ad-hoc signature: required for Apple Silicon until a Developer ID certificate is configured.
   identity: '-'
   hardenedRuntime: false
