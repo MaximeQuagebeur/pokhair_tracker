@@ -149,7 +149,6 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
   const participants = new Set<string>();
   const contrib = new Map<string, number>();
   let streetContrib = new Map<string, number>();
-  const refunds = new Map<string, number>();
   const collected = new Map<string, number>();
   const summaryWon = new Map<string, number>();
   const shown = new Map<string, number[]>();
@@ -179,10 +178,6 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
 
   const closeStreet = () => {
     if (street === 'blinds' || street === 'showdown' || street === 'summary') return;
-    const sorted = [...streetContrib.entries()].sort((a, b) => b[1] - a[1]);
-    if (sorted.length && sorted[0][1] > (sorted[1]?.[1] ?? 0)) {
-      add(refunds, sorted[0][0], sorted[0][1] - (sorted[1]?.[1] ?? 0));
-    }
     if (street !== 'river' && !allInBoard && hero) {
       const active = [...participants].filter((p) => !folded.has(p));
       const notAllIn = active.filter((p) => !allIn.has(p));
@@ -323,14 +318,9 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
   if (street !== 'summary') closeStreet();
   if (!hero || !participants.has(hero)) return null;
 
+  // Winamax "collected" / "won" amounts are net of rake and already include uncalled bets returned.
   const winnings = collected.size ? collected : summaryWon;
-  const totalContrib = [...contrib.values()].reduce((a, b) => a + b, 0);
-  const totalRefund = [...refunds.values()].reduce((a, b) => a + b, 0);
-  const totalCollected = [...winnings.values()].reduce((a, b) => a + b, 0);
-  // Some histories already include the uncalled bet in "collected"; detect which convention applies.
-  const applyRefunds =
-    Math.abs(totalCollected + rake + totalRefund - totalContrib) <= Math.abs(totalCollected + rake - totalContrib);
-  const invested = (p: string) => (contrib.get(p) ?? 0) - (applyRefunds ? refunds.get(p) ?? 0 : 0);
+  const invested = (p: string) => contrib.get(p) ?? 0;
 
   const heroInvested = invested(hero);
   const net = round((winnings.get(hero) ?? 0) - heroInvested);

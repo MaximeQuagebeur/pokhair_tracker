@@ -53,11 +53,11 @@ Oceju2635 calls 0.04€
 Oceju2635 checks
 MaxDr644 bets 0.08€
 Oceju2635 folds
-MaxDr644 collected 0.13€ from pot
+MaxDr644 collected 0.21€ from pot
 *** SUMMARY ***
-Total pot 0.13€ | No rake
+Total pot 0.21€ | No rake
 Board: [8h 3c 2d]
-Seat 2: MaxDr644 won 0.13€
+Seat 2: MaxDr644 won 0.21€
 `;
 
 const ALL_IN_HAND = `${HEADER('22989145-288-1790794437')}
@@ -123,6 +123,12 @@ describe('parseWinamaxFile', () => {
 
   it('computes net with uncalled bets', () => {
     expect(simple.net).toBeCloseTo(0.07, 4);
+    const raked = parseWinamaxFile(
+      SIMPLE_HAND.replace('collected 0.21€', 'collected 0.20€').replace('No rake', 'Rake 0.01€'),
+      'raked.txt',
+    ).hands[0];
+    // "collected" is already net of rake: it must not be subtracted again.
+    expect(raked.net).toBeCloseTo(0.06, 4);
     expect(simple.allInEv).toBeCloseTo(0.07, 4);
     expect(simple).toMatchObject({ vpip: true, pfr: true, sawFlop: true, showdown: false, postflopBets: 1 });
     expect(threeBet.net).toBeCloseTo(0.09, 4);

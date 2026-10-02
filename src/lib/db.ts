@@ -37,6 +37,12 @@ class PokhairDB extends Dexie {
       .upgrade(async (tx) => {
         await tx.table('files').clear();
       });
+    // v4: strict Net Won (collected - invested): recompute every hand.
+    this.version(4)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table('files').clear();
+      });
   }
 }
 
