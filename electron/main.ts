@@ -135,7 +135,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     backgroundColor: '#09090b',
-    title: 'Pokhair Tracker',
+    title: 'Pok\'Hair Tracker',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

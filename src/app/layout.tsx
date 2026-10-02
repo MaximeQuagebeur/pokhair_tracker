@@ -7,7 +7,7 @@ import { THEME_SCRIPT } from '@/lib/theme';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Pokhair Tracker',
+  title: 'Pok\'Hair Tracker',
   description: 'Tracker de poker desktop — Winamax Cash Game',
 };
 

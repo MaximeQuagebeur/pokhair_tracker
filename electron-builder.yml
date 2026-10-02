@@ -1,5 +1,5 @@
 appId: com.pokhair.tracker
-productName: Pokhair Tracker
+productName: Pok'Hair Tracker
 directories:
   output: dist
 files:

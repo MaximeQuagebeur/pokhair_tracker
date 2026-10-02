@@ -45,7 +45,7 @@ export function Sidebar() {
         <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <Spade className="size-4" />
         </div>
-        <span className="font-semibold tracking-tight">Pokhair Tracker</span>
+        <span className="font-semibold tracking-tight">Pok'Hair Tracker</span>
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-3">
         <p className="px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Modules</p>
