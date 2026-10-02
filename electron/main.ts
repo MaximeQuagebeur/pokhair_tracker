@@ -79,6 +79,8 @@ function registerIpc() {
     if (!mainWindow) return null;
     const result = await dialog.showOpenDialog(mainWindow, {
       title: "Choisir le dossier d'historique Winamax",
+      message: 'Les fichiers ne sont pas affichés : sélectionnez simplement le dossier « history ».',
+      buttonLabel: 'Sélectionner ce dossier',
       defaultPath: defaultWinamaxDir(),
       properties: ['openDirectory'],
     });
