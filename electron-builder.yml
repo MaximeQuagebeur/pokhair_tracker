@@ -1,0 +1,30 @@
+appId: com.pokhair.tracker
+productName: Pokhair Tracker
+directories:
+  output: dist
+files:
+  - dist-electron/**
+  - out/**
+  - package.json
+asar: true
+artifactName: pokhair-tracker-${version}-${os}-${arch}.${ext}
+mac:
+  category: public.app-category.utilities
+  # Ad-hoc signature: required for Apple Silicon until a Developer ID certificate is configured.
+  identity: '-'
+  hardenedRuntime: false
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+linux:
+  category: Utility
+  target:
+    - target: AppImage
+      arch: [x64]
