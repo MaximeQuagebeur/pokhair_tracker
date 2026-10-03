@@ -1,11 +1,13 @@
 import type { Position } from './types';
 
-export const POSITIONS: Position[] = ['UTG', 'MP', 'CO', 'BTN', 'SB', 'BB'];
+/** Preflop action order. */
+export const POSITIONS: Position[] = ['UTG', 'MP', 'HJ', 'CO', 'BTN', 'SB', 'BB'];
 export const STEAL_POSITIONS: Position[] = ['CO', 'BTN', 'SB'];
 
 /**
  * Positions of the players dealt in. Seats are walked clockwise from the button;
- * players between the big blind and the button are labelled UTG … MP … CO.
+ * players between the big blind and the button are labelled from the button backwards
+ * (CO, HJ, then UTG … MP), so short-handed tables drop the earliest positions first.
  */
 export function assignPositions(
   seats: { seat: number; name: string }[],
@@ -22,6 +24,9 @@ export function assignPositions(
   if (smallBlind && !result.has(smallBlind)) result.set(smallBlind, 'SB');
   if (bigBlind && !result.has(bigBlind)) result.set(bigBlind, 'BB');
   const others = clockwise.filter((s) => !result.has(s.name));
-  others.forEach((s, i) => result.set(s.name, i === others.length - 1 ? 'CO' : i === 0 ? 'UTG' : 'MP'));
+  others.forEach((s, i) => {
+    const fromButton = others.length - 1 - i;
+    result.set(s.name, fromButton === 0 ? 'CO' : fromButton === 1 ? 'HJ' : i === 0 ? 'UTG' : 'MP');
+  });
   return result;
 }

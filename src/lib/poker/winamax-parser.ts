@@ -425,6 +425,7 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
     preflopActions,
     steal: heroOpenedFirstIn && !!heroPosition && STEAL_POSITIONS.includes(heroPosition),
     foldToThreeBet,
+    heroAllIn: allIn.has(hero),
     sourceFile,
   };
 }

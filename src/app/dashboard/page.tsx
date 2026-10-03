@@ -1,18 +1,19 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FolderOpen, Info } from 'lucide-react';
+import { Info, Settings } from 'lucide-react';
 import { FiltersBar } from '@/components/dashboard/filters-bar';
 import { PerformanceChart } from '@/components/dashboard/performance-chart';
 import { StatCards, type StatsMode } from '@/components/dashboard/stat-cards';
-import { useSync } from '@/components/providers/sync-provider';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/segmented';
 import { db } from '@/lib/db';
-import { availableLimits, filterHands, filterTournaments, type HandFilters } from '@/lib/poker/filters';
+import { availableLimits, filterHands, filterTournaments } from '@/lib/poker/filters';
 import { buildCurves, buildTournamentCurve, computeStats, type Unit } from '@/lib/poker/stats';
+import { useDashboardStore } from '@/stores/useDashboardStore';
 
 const UNIT_OPTIONS = [
   { value: 'eur', label: '€' },
@@ -20,9 +21,10 @@ const UNIT_OPTIONS = [
 ] as const;
 
 export default function DashboardPage() {
-  const [unit, setUnit] = useState<Unit>('eur');
-  const [filters, setFilters] = useState<HandFilters>({ date: 'all', game: 'all', limit: 'all' });
-  const { chooseFolder } = useSync();
+  const { unit, setUnit, filters, setFilters, axis, setAxis } = useDashboardStore();
+  useEffect(() => {
+    useDashboardStore.persist.rehydrate();
+  }, []);
   const hands = useLiveQuery(() => db.hands.orderBy('timestamp').toArray(), []);
   const tournaments = useLiveQuery(() => db.tournaments.toArray(), []);
 
@@ -66,18 +68,28 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Statistiques & Graphiques</h1>
           <p className="text-sm text-muted-foreground">Winamax</p>
         </div>
-        {mode !== 'tournament' && <Segmented value={unit} options={UNIT_OPTIONS} onChange={setUnit} />}
+        <div className="flex items-center gap-3">
+          <Segmented
+            value={axis}
+            options={[
+              { value: 'count', label: mode === 'tournament' ? 'Tournois' : 'Mains' },
+              { value: 'date', label: 'Dates' },
+            ]}
+            onChange={setAxis}
+          />
+          {mode !== 'tournament' && <Segmented value={unit} options={UNIT_OPTIONS} onChange={setUnit} />}
+        </div>
       </div>
 
       {isEmpty ? (
         <Card className="flex flex-col items-center gap-4 p-12 text-center">
           <p className="text-muted-foreground">
-            Aucune main importée. Sélectionnez votre dossier d&apos;historique Winamax pour commencer.
+            Aucune main importée. Sélectionnez votre dossier d&apos;historique Winamax dans les réglages pour commencer.
           </p>
-          <Button onClick={chooseFolder}>
-            <FolderOpen />
-            Choisir un dossier
-          </Button>
+          <Link href="/settings" className={buttonVariants()}>
+            <Settings />
+            Ouvrir les réglages
+          </Link>
         </Card>
       ) : (
         <>
@@ -98,6 +110,7 @@ export default function DashboardPage() {
                 data={curves}
                 unit={effectiveUnit}
                 xAxis={mode === 'tournament' ? 'tournament' : 'hand'}
+                showDates={axis === 'date'}
                 series={mode === 'tournament' ? ['net'] : undefined}
               />
             </>

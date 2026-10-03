@@ -3,11 +3,14 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
+  Check,
   ChevronLeft,
   ChevronRight,
+  Copy,
   Pause,
   Play,
   RotateCcw,
+  Shuffle,
   SkipBack,
   SkipForward,
   Volume2,
@@ -20,6 +23,7 @@ import { Segmented } from '@/components/ui/segmented';
 import { db } from '@/lib/db';
 import {
   buildReplay,
+  describeHand,
   formatReplayAmount,
   type ReplayerHand,
   type ReplayerPlayer,
@@ -109,14 +113,18 @@ interface PokerTableReplayerProps {
   onClose: () => void;
   onPrevHand?: () => void;
   onNextHand?: () => void;
+  onRandomHand?: () => void;
 }
 
-export function PokerTableReplayer({ hand, counter, onClose, onPrevHand, onNextHand }: PokerTableReplayerProps) {
+export function PokerTableReplayer({ hand, counter, onClose, onPrevHand, onNextHand, onRandomHand }: PokerTableReplayerProps) {
   const text = useLiveQuery(() => db.handTexts.get(hand.id).then((t) => t ?? null), [hand.id]);
   const unit = useHandFilterStore((s) => s.replayerUnit);
   const replay = useMemo(() => (text ? buildReplay(text.text, unit) : null), [text, unit]);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<Speed>('1');
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => setCopied(false), [hand.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -127,6 +135,18 @@ export function PokerTableReplayer({ hand, counter, onClose, onPrevHand, onNextH
   }, [onClose]);
 
   const isCash = hand.gameType === 'cash';
+  const net = `${hand.net > 0 ? '+' : ''}${formatReplayAmount(hand.net, { isCash, bigBlind: hand.bigBlind }, unit)}`;
+
+  const copyHand = async () => {
+    if (!replay) return;
+    const header = [
+      `Main #${hand.id} — ${isCash ? 'Cash game' : 'Tournoi'} ${hand.limit} — ${hand.game}`,
+      `Table : ${hand.table} · ${dateFormat.format(hand.timestamp)}`,
+      `Héros : ${hand.hero}${hand.heroPosition ? ` (${hand.heroPosition})` : ''} · Résultat : ${net}`,
+    ];
+    await navigator.clipboard.writeText(describeHand(replay, unit, header));
+    setCopied(true);
+  };
 
   return (
     <div
@@ -161,10 +181,13 @@ export function PokerTableReplayer({ hand, counter, onClose, onPrevHand, onNextH
               hand.net > 0 ? 'text-emerald-500' : hand.net < 0 ? 'text-red-500' : 'text-muted-foreground',
             )}
           >
-            {hand.net > 0 ? '+' : ''}
-            {formatReplayAmount(hand.net, { isCash, bigBlind: hand.bigBlind }, unit)}
+            {net}
           </span>
           {counter && <span className="text-xs tabular-nums text-muted-foreground">{counter}</span>}
+          <Button variant="outline" size="sm" onClick={copyHand} disabled={!replay} title="Copier le déroulé de la main">
+            {copied ? <Check /> : <Copy />}
+            {copied ? 'Copié' : 'Copier'}
+          </Button>
           <Button variant="ghost" size="icon" onClick={onClose} aria-label="Fermer">
             <X />
           </Button>
@@ -181,6 +204,7 @@ export function PokerTableReplayer({ hand, counter, onClose, onPrevHand, onNextH
             speedControl={<Segmented value={speed} options={SPEEDS} onChange={setSpeed} />}
             onPrevHand={onPrevHand}
             onNextHand={onNextHand}
+            onRandomHand={onRandomHand}
           />
         ) : (
           <p className="p-16 text-center text-sm text-muted-foreground">
@@ -203,6 +227,7 @@ interface ReplayerViewProps {
   speedControl: ReactNode;
   onPrevHand?: () => void;
   onNextHand?: () => void;
+  onRandomHand?: () => void;
 }
 
 function ReplayerView({
@@ -214,6 +239,7 @@ function ReplayerView({
   speedControl,
   onPrevHand,
   onNextHand,
+  onRandomHand,
 }: ReplayerViewProps) {
   const [index, setIndex] = useState(0);
   const { steps } = replay;
@@ -488,6 +514,9 @@ function ReplayerView({
               title="Recommencer"
             >
               <RotateCcw />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onRandomHand} disabled={!onRandomHand} title="Main au hasard (filtres actifs)">
+              <Shuffle />
             </Button>
           </div>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">

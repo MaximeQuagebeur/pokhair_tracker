@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildReplay } from '../actionEngine';
+import { buildReplay, describeHand } from '../actionEngine';
 import { DEFAULT_HAND_SEARCH, searchHands } from '../hand-search';
 import { parseWinamaxFile } from '../winamax-parser';
 
@@ -120,6 +120,7 @@ describe('hand record replayer fields', () => {
     expect(search({ preflop: 'foldToThreeBet' })).toEqual([foldTo3Bet]);
     expect(search({ preflop: 'steal' }).map((h) => h.id)).toEqual([simple.id, allIn.id]);
     expect(search({ ending: 'showdown' })).toEqual([allIn]);
+    expect(search({ preflop: 'allIn' })).toEqual([allIn]);
     expect(search({ pot: 'medium' })).toHaveLength(3);
     expect(search({ pot: 'small' })).toEqual([]);
     expect(search({ sortKey: 'netBB', sortDir: 'asc' })[0]).toBe(allIn);
@@ -138,6 +139,8 @@ describe('buildReplay', () => {
     const hero = (i: number) => replay.steps[i].players.find((p) => p.isHero)!;
     expect(init.players.find((p) => p.name === 'Oceju2635')).toMatchObject({ bet: 0.02, stack: 1.98, position: 'BB' });
     expect(init.players.find((p) => p.name === 'Big Fish')).toMatchObject({ isButton: true, position: 'BTN' });
+    expect(init.players.find((p) => p.name === 'Zudairem')).toMatchObject({ position: 'HJ' });
+    expect(init.players.find((p) => p.name === 'MaxDr644')).toMatchObject({ position: 'CO' });
     expect(hero(0).cards).toEqual(['Qc', 'Qs']);
     expect(init.players.find((p) => p.name === 'Zudairem')?.cards).toBeNull();
 
@@ -154,6 +157,14 @@ describe('buildReplay', () => {
     const payout = replay.steps[replay.steps.length - 1];
     expect(payout.players.find((p) => p.isHero)).toMatchObject({ won: 0.21, stack: 2.01 });
     expect(payout.pot).toBe(0);
+  });
+
+  it('describes the hand as plain text', () => {
+    const text = describeHand(buildReplay(SIMPLE_HAND)!, 'stake');
+    expect(text).toMatch(/- CO MaxDr644 \(Héros\) : 1,94\s€ \(97 bb\) — Q♣ Q♠/);
+    expect(text).toContain('- [HJ] Zudairem se couche');
+    expect(text).toMatch(/Flop : .+ \(pot 0,13\s€, 2 joueurs\) :/);
+    expect(text).toMatch(/Résultat : MaxDr644 remporte 0,21\s€/);
   });
 
   it('runs out the board and reveals cards at showdown', () => {

@@ -62,6 +62,18 @@ class PokhairDB extends Dexie {
         await tx.table('tournaments').clear();
         await tx.table('files').clear();
       });
+    // v7 labels positions from the button backwards (HJ added): re-parse every file.
+    this.version(7)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table('files').clear();
+      });
+    // v8 adds `heroAllIn`: re-parse every file.
+    this.version(8)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table('files').clear();
+      });
   }
 }
 

@@ -1,6 +1,6 @@
 import { prettyCard } from './cards';
 import { buildPots } from './equity';
-import { assignPositions } from './positions';
+import { assignPositions, POSITIONS } from './positions';
 import type { Position } from './types';
 import { parseAmount } from './winamax-parser';
 import { formatStake } from '../utils';
@@ -61,6 +61,8 @@ export interface ReplayerHand {
   smallBlind: number;
   bigBlind: number;
   hero: string | null;
+  /** Stacks before antes and blinds, by player name. */
+  startingStacks: Record<string, number>;
   steps: ReplayerStep[];
   /** First step of each street reached by the hand. */
   streetStarts: Partial<Record<ReplayStreet, number>>;
@@ -436,7 +438,47 @@ export function buildReplay(text: string, unit: ReplayUnit = 'stake'): ReplayerH
     smallBlind: h.smallBlind,
     bigBlind: h.bigBlind,
     hero: h.hero,
+    startingStacks: Object.fromEntries(h.seats.map((s) => [s.name, s.stack])),
     steps,
     streetStarts,
   };
+}
+
+/** Plain-text summary of the hand (players, actions street by street, result), e.g. to paste into an AI chat. */
+export function describeHand(replay: ReplayerHand, unit: ReplayUnit, header: string[] = []): string {
+  const fmt = (v: number) => formatReplayAmount(v, replay, unit);
+  const [init] = replay.steps;
+  const order = (p: ReplayerPlayer) => (p.position ? POSITIONS.indexOf(p.position) : POSITIONS.length);
+  const dealt = init.players.filter((p) => p.inHand).sort((a, b) => order(a) - order(b));
+  const label = (p: ReplayerPlayer) => `${p.position ? `${p.position} ` : ''}${p.name}${p.isHero ? ' (Héros)' : ''}`;
+  const bySeat = new Map(init.players.map((p) => [p.seat, p]));
+
+  const lines = [
+    ...header,
+    `Blindes : ${fmt(replay.smallBlind)} / ${fmt(replay.bigBlind)} · ${dealt.length} joueurs (table ${replay.maxSeats}-max)`,
+    '',
+    'Joueurs (stacks de départ) :',
+    ...dealt.map((p) => {
+      const stack = replay.startingStacks[p.name] ?? p.stack;
+      const bb = unit === 'stake' && replay.bigBlind > 0 ? ` (${formatReplayAmount(stack, replay, 'bb')})` : '';
+      const cards = p.isHero && p.cards ? ` — ${prettyCards(p.cards)}` : '';
+      return `- ${label(p)} : ${fmt(stack)}${bb}${cards}`;
+    }),
+    '',
+    'Préflop :',
+  ];
+  for (const step of replay.steps.slice(1)) {
+    if (step.kind === 'action') {
+      const p = step.activeSeat !== null ? bySeat.get(step.activeSeat) : undefined;
+      lines.push(`- ${p?.position ? `[${p.position}] ` : ''}${step.message}`);
+    } else if (step.kind === 'street') {
+      const left = step.players.filter((p) => p.inHand && !p.folded).length;
+      lines.push('', `${step.message} (pot ${fmt(step.pot)}, ${left} joueurs) :`);
+    } else if (step.kind === 'showdown') {
+      lines.push('', step.message);
+    } else if (step.kind === 'payout') {
+      lines.push('', `Résultat : ${step.message}`);
+    }
+  }
+  return lines.join('\n');
 }

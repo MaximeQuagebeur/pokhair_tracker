@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronLeft, ChevronRight, FolderOpen, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, FolderOpen, RotateCcw, Shuffle } from 'lucide-react';
 import { HandTable } from '@/components/hands/HandTable';
 import { PokerTableReplayer } from '@/components/hands/PokerTableReplayer';
 import { useSync } from '@/components/providers/sync-provider';
@@ -70,6 +70,10 @@ export function HandList() {
   const currentPage = Math.min(page, pageCount - 1);
   const visible = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
 
+  const randomHand = () => {
+    const pool = filtered.length > 1 ? filtered.filter((h) => h.id !== selectedHandId) : filtered;
+    if (pool.length) selectHand(pool[Math.floor(Math.random() * pool.length)].id);
+  };
   useEffect(() => setPage(0), [filters]);
   // Keep the replayed hand visible in the list while navigating hand by hand.
   useEffect(() => {
@@ -169,7 +173,12 @@ export function HandList() {
             </>
           )}
         </span>
-        {pageCount > 1 && (
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={randomHand} disabled={!filtered.length}>
+            <Shuffle />
+            Main au hasard
+          </Button>
+          {pageCount > 1 && (
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="icon" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)} aria-label="Page précédente">
               <ChevronLeft />
@@ -187,7 +196,8 @@ export function HandList() {
               <ChevronRight />
             </Button>
           </div>
-        )}
+          )}
+        </div>
       </div>
 
       <Card>
@@ -209,6 +219,7 @@ export function HandList() {
               ? () => selectHand(filtered[selectedIndex + 1].id)
               : undefined
           }
+          onRandomHand={filtered.length ? randomHand : undefined}
         />
       )}
     </div>

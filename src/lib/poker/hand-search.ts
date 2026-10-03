@@ -2,7 +2,7 @@ import type { GameFilter } from './filters';
 import type { EndStreet, HandRecord, Position } from './types';
 
 export type ResultFilter = 'all' | 'won' | 'lost';
-export type PreflopFilter = 'all' | 'vpip' | 'pfr' | 'threeBet' | 'foldToThreeBet' | 'steal';
+export type PreflopFilter = 'all' | 'vpip' | 'pfr' | 'threeBet' | 'foldToThreeBet' | 'steal' | 'allIn';
 export type EndingFilter = 'all' | EndStreet;
 export type PotFilter = 'all' | 'small' | 'medium' | 'large';
 export type HandDateRange = 'today' | '7d' | 'month' | 'all' | 'custom';
@@ -48,7 +48,7 @@ export const RESULT_OPTIONS: { value: ResultFilter; label: string }[] = [
 
 export const POSITION_OPTIONS: { value: 'all' | Position; label: string }[] = [
   { value: 'all', label: 'Tous' },
-  ...(['SB', 'BB', 'UTG', 'MP', 'CO', 'BTN'] as const).map((p) => ({ value: p, label: p })),
+  ...(['SB', 'BB', 'UTG', 'MP', 'HJ', 'CO', 'BTN'] as const).map((p) => ({ value: p, label: p })),
 ];
 
 export const PREFLOP_OPTIONS: { value: PreflopFilter; label: string }[] = [
@@ -58,6 +58,7 @@ export const PREFLOP_OPTIONS: { value: PreflopFilter; label: string }[] = [
   { value: 'threeBet', label: '3-Bet' },
   { value: 'foldToThreeBet', label: 'Fold face à un 3-Bet' },
   { value: 'steal', label: 'Vol de blinds (Steal)' },
+  { value: 'allIn', label: 'All-in' },
 ];
 
 export const ENDING_OPTIONS: { value: EndingFilter; label: string }[] = [
@@ -135,6 +136,8 @@ function matchesPreflop(h: HandRecord, filter: PreflopFilter): boolean {
       return h.foldToThreeBet;
     case 'steal':
       return h.steal;
+    case 'allIn':
+      return h.heroAllIn;
     default:
       return true;
   }

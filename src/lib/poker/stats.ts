@@ -94,6 +94,8 @@ export function computeStats(hands: HandRecord[], tournaments: TournamentRecord[
 export interface CurvePoint {
   /** X axis: hand number, or tournament number for tournament-only views. */
   x: number;
+  /** Epoch ms of the hand / tournament end reached at this point. */
+  time: number;
   net: number;
   ev: number;
   showdown: number;
@@ -101,12 +103,13 @@ export interface CurvePoint {
 }
 
 function downsample<T>(items: T[], maxPoints: number, toPoint: (item: T, i: number) => CurvePoint | null): CurvePoint[] {
-  const points: CurvePoint[] = [{ x: 0, net: 0, ev: 0, showdown: 0, nonShowdown: 0 }];
+  const points: CurvePoint[] = [{ x: 0, time: 0, net: 0, ev: 0, showdown: 0, nonShowdown: 0 }];
   const step = Math.max(1, Math.ceil(items.length / maxPoints));
   items.forEach((item, i) => {
     const point = toPoint(item, i);
     if (point && ((i + 1) % step === 0 || i === items.length - 1)) points.push(point);
   });
+  points[0].time = points[1]?.time ?? 0;
   return points;
 }
 
@@ -142,12 +145,16 @@ export function buildCurves(
       if (h.showdown) sd += h.net * factor;
       else nsd += h.net * factor;
     }
-    return { x: i + 1, net, ev, showdown: sd, nonShowdown: nsd };
+    return { x: i + 1, time: h.timestamp, net, ev, showdown: sd, nonShowdown: nsd };
   });
 
+  const lastResult = results[results.length - 1];
   addResultsUntil(Infinity);
   const last = points[points.length - 1];
-  if (last.net !== net) points.push({ x: hands.length, net, ev, showdown: sd, nonShowdown: nsd });
+  if (last.net !== net) {
+    points.push({ x: hands.length, time: Math.max(last.time, lastResult?.endTime ?? 0), net, ev, showdown: sd, nonShowdown: nsd });
+  }
+  if (points.length > 1) points[0].time = Math.min(points[1].time, hands[0]?.timestamp ?? Infinity, results[0]?.endTime ?? Infinity);
   return points;
 }
 
@@ -157,6 +164,6 @@ export function buildTournamentCurve(tournaments: TournamentRecord[], maxPoints 
   let net = 0;
   return downsample(finished, maxPoints, (t, i) => {
     net += tournamentProfit(t);
-    return { x: i + 1, net, ev: net, showdown: 0, nonShowdown: 0 };
+    return { x: i + 1, time: t.endTime, net, ev: net, showdown: 0, nonShowdown: 0 };
   });
 }

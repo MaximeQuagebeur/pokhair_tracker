@@ -38,18 +38,39 @@ const TOURNAMENT_NET_INFO = 'Bénéfice cumulé tournoi par tournoi : gains enca
 
 type SeriesKey = (typeof SERIES)[number]['key'];
 
+const DAY_MS = 86_400_000;
+const dayFormat = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+const hourFormat = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+const fullFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+
 interface PerformanceChartProps {
   data: CurvePoint[];
   unit: Unit;
   xAxis: 'hand' | 'tournament';
+  /** Label the X axis with the date of each hand / tournament instead of its number. */
+  showDates?: boolean;
   series?: readonly SeriesKey[];
 }
 
-export function PerformanceChart({ data, unit, xAxis, series }: PerformanceChartProps) {
+export function PerformanceChart({ data, unit, xAxis, showDates: byDate = false, series }: PerformanceChartProps) {
   const [hidden, setHidden] = useState<Set<SeriesKey>>(new Set());
   const last = data[data.length - 1];
   const visibleSeries = SERIES.filter((s) => !series || series.includes(s.key));
   const xLabel = xAxis === 'hand' ? 'Main' : 'Tournoi';
+  const shortRange = byDate && data.length > 0 && data[data.length - 1].time - data[0].time < 2 * DAY_MS;
+  // Date of the last point at or before x (points are sorted by x).
+  const timeAt = (x: number) => {
+    let lo = 0;
+    let hi = data.length - 1;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (data[mid].x <= x) lo = mid;
+      else hi = mid - 1;
+    }
+    return data[lo]?.time ?? 0;
+  };
+  const formatTick = (v: number) =>
+    byDate ? (shortRange ? hourFormat : dayFormat).format(timeAt(v)) : v.toLocaleString('fr-FR');
 
   const toggle = (key: SeriesKey) =>
     setHidden((prev) => {
@@ -99,8 +120,9 @@ export function PerformanceChart({ data, unit, xAxis, series }: PerformanceChart
               dataKey="x"
               type="number"
               domain={[0, 'dataMax']}
+              minTickGap={24}
               tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
-              tickFormatter={(v: number) => v.toLocaleString('fr-FR')}
+              tickFormatter={formatTick}
             />
             <YAxis
               orientation="right"
@@ -116,7 +138,11 @@ export function PerformanceChart({ data, unit, xAxis, series }: PerformanceChart
                 borderRadius: 8,
                 fontSize: 12,
               }}
-              labelFormatter={(v) => `${xLabel} #${Number(v).toLocaleString('fr-FR')}`}
+              labelFormatter={(v) =>
+                byDate
+                  ? `${xLabel} #${Number(v).toLocaleString('fr-FR')} · ${fullFormat.format(timeAt(Number(v)))}`
+                  : `${xLabel} #${Number(v).toLocaleString('fr-FR')}`
+              }
               formatter={(v) => formatAmount(Number(v), unit)}
             />
             {visibleSeries.map((s) => (

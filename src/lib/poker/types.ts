@@ -1,5 +1,5 @@
 export type GameType = 'cash' | 'tournament' | 'expresso';
-export type Position = 'UTG' | 'MP' | 'CO' | 'BTN' | 'SB' | 'BB';
+export type Position = 'UTG' | 'MP' | 'HJ' | 'CO' | 'BTN' | 'SB' | 'BB';
 /** Last street of the hand ('showdown' when cards were shown down). */
 export type EndStreet = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
 
@@ -75,5 +75,7 @@ export interface HandRecord {
   /** Hero open-raised first in from CO / BTN / SB. */
   steal: boolean;
   foldToThreeBet: boolean;
+  /** Hero was all-in at some point of the hand (bet, raise, call or blind). */
+  heroAllIn: boolean;
   sourceFile: string;
 }
