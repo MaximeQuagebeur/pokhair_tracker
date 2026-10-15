@@ -1,9 +1,11 @@
+import { ChevronRight } from 'lucide-react';
 import { MiniCard } from '@/components/hands/PlayingCard';
 import { netBB, potBB } from '@/lib/poker/hand-search';
 import type { HandRecord } from '@/lib/poker/types';
 import { cn, formatNumber, formatStake } from '@/lib/utils';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
+const shortDateFormat = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const signed = (text: string, value: number) => (value > 0 ? `+${text}` : text);
 
 interface HandTableProps {
@@ -14,7 +16,67 @@ interface HandTableProps {
 
 export function HandTable({ hands, selectedId, onSelect }: HandTableProps) {
   return (
-    <div className="overflow-x-auto">
+    <>
+      <MobileHandList hands={hands} selectedId={selectedId} onSelect={onSelect} />
+      <DesktopHandTable hands={hands} selectedId={selectedId} onSelect={onSelect} />
+    </>
+  );
+}
+
+function MobileHandList({ hands, selectedId, onSelect }: HandTableProps) {
+  return (
+    <ul className="flex flex-col gap-2 md:hidden">
+      {hands.map((h) => {
+        const isCash = h.gameType === 'cash';
+        const bb = netBB(h);
+        return (
+          <li key={h.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(h.id)}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-2xl border bg-card px-3 py-2.5 text-left transition-transform active:scale-[0.98] active:bg-accent',
+                selectedId === h.id && 'border-primary/60',
+              )}
+            >
+              <div className="flex w-[58px] shrink-0 flex-col items-center gap-1">
+                <div className="flex gap-0.5">
+                  {h.heroCards.length ? (
+                    h.heroCards.map((c) => <MiniCard key={c} card={c} />)
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+                <span className="text-[10px] font-semibold text-muted-foreground">{h.heroPosition ?? '—'}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{h.table}</div>
+                <div className="truncate text-xs text-muted-foreground">
+                  {h.limit} · {shortDateFormat.format(h.timestamp)}
+                  {h.showdown && ' · SD'}
+                </div>
+              </div>
+              <div
+                className={cn(
+                  'shrink-0 text-right text-sm font-semibold tabular-nums',
+                  h.net > 0 ? 'text-emerald-500' : h.net < 0 ? 'text-red-500' : 'text-muted-foreground',
+                )}
+              >
+                {signed(formatStake(h.net, isCash), h.net)}
+                <div className="text-[11px] font-normal opacity-80">{signed(formatNumber(bb, 1, ' bb'), bb)}</div>
+              </div>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground/60" />
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function DesktopHandTable({ hands, selectedId, onSelect }: HandTableProps) {
+  return (
+    <div className="overflow-x-auto max-md:hidden">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">

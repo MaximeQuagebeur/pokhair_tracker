@@ -9,10 +9,13 @@ import { PokerTableReplayer } from '@/components/hands/PokerTableReplayer';
 import { useSync } from '@/components/providers/sync-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { FilterField, FilterPanel, mobileSelectClass } from '@/components/ui/filter-panel';
 import { Segmented } from '@/components/ui/segmented';
+import { MOBILE_QUERY, useIsMobile } from '@/hooks/use-is-mobile';
 import { db } from '@/lib/db';
 import { availableLimits, GAME_OPTIONS } from '@/lib/poker/filters';
 import {
+  DEFAULT_HAND_SEARCH,
   ENDING_OPTIONS,
   HAND_DATE_OPTIONS,
   netBB,
@@ -37,14 +40,16 @@ function Select<T extends string>({
   options,
   onChange,
   label,
+  className = controlClass,
 }: {
   value: T;
   options: readonly { value: T; label: string }[];
   onChange: (value: T) => void;
   label: string;
+  className?: string;
 }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value as T)} className={controlClass} aria-label={label}>
+    <select value={value} onChange={(e) => onChange(e.target.value as T)} className={className} aria-label={label}>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
@@ -54,20 +59,9 @@ function Select<T extends string>({
   );
 }
 
-const MOBILE_QUERY = '(max-width: 767px)';
-
-/** `null` until mounted, so the desktop modal never flashes on phones. */
-function useIsMobile() {
-  const [mobile, setMobile] = useState<boolean | null>(null);
-  useEffect(() => {
-    const mq = window.matchMedia(MOBILE_QUERY);
-    const update = () => setMobile(mq.matches);
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
-  }, []);
-  return mobile;
-}
+const FILTER_KEYS = ['date', 'game', 'limit', 'result', 'position', 'preflop', 'ending', 'pot'] as const;
+const labelOf = (options: readonly { value: string; label: string }[], value: string) =>
+  options.find((o) => o.value === value)?.label ?? value;
 
 export function HandList() {
   const { chooseFolder } = useSync();
@@ -96,7 +90,7 @@ export function HandList() {
 
   const randomHand = () => {
     const pool = filtered.length > 1 ? filtered.filter((h) => h.id !== selectedHandId) : filtered;
-    if (pool.length) selectHand(pool[Math.floor(Math.random() * pool.length)].id);
+    if (pool.length) openHand(pool[Math.floor(Math.random() * pool.length)].id);
   };
   useEffect(() => setPage(0), [filters]);
   // Keep the replayed hand visible in the list while navigating hand by hand.
@@ -109,9 +103,23 @@ export function HandList() {
     return { net: cash.reduce((a, h) => a + h.net, 0), bb: cash.reduce((a, h) => a + netBB(h), 0), cash: cash.length };
   }, [filtered]);
 
+  const activeCount = FILTER_KEYS.filter((k) => (k === 'limit' ? limit : filters[k]) !== DEFAULT_HAND_SEARCH[k]).length;
+  const summary = [
+    labelOf(HAND_DATE_OPTIONS, filters.date),
+    labelOf(GAME_OPTIONS, filters.game),
+    limit !== 'all' && limit,
+    filters.result !== 'all' && labelOf(RESULT_OPTIONS, filters.result),
+    filters.position !== 'all' && filters.position,
+    filters.preflop !== 'all' && labelOf(PREFLOP_OPTIONS, filters.preflop),
+    filters.ending !== 'all' && labelOf(ENDING_OPTIONS, filters.ending),
+    filters.pot !== 'all' && labelOf(POT_OPTIONS, filters.pot),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   if (hands?.length === 0) {
     return (
-      <Card className="flex flex-col items-center gap-4 p-12 text-center">
+      <Card className="flex flex-col items-center gap-4 p-12 text-center max-md:rounded-2xl max-md:p-8">
         <p className="text-muted-foreground">Aucune main importée.</p>
         <Button onClick={chooseFolder}>
           <FolderOpen />
@@ -123,7 +131,103 @@ export function HandList() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-3 p-4">
+      <FilterPanel className="md:hidden" summary={summary} activeCount={activeCount}>
+        <FilterField label="Période">
+          <Segmented fill value={filters.date} options={HAND_DATE_OPTIONS} onChange={(v) => setFilter('date', v)} />
+        </FilterField>
+        {filters.date === 'custom' && (
+          <div className="grid grid-cols-2 gap-3">
+            <FilterField label="Du">
+              <input
+                type="date"
+                value={filters.from}
+                onChange={(e) => setFilter('from', e.target.value)}
+                className={mobileSelectClass}
+              />
+            </FilterField>
+            <FilterField label="Au">
+              <input
+                type="date"
+                value={filters.to}
+                onChange={(e) => setFilter('to', e.target.value)}
+                className={mobileSelectClass}
+              />
+            </FilterField>
+          </div>
+        )}
+        <FilterField label="Jeu">
+          <Segmented fill value={filters.game} options={GAME_OPTIONS} onChange={(v) => setFilter('game', v)} />
+        </FilterField>
+        <FilterField label="Limite">
+          <select
+            value={limit}
+            onChange={(e) => setFilter('limit', e.target.value)}
+            className={mobileSelectClass}
+            aria-label="Limite"
+          >
+            <option value="all">Toutes les limites</option>
+            {limits.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </FilterField>
+        <FilterField label="Résultat">
+          <Segmented fill value={filters.result} options={RESULT_OPTIONS} onChange={(v) => setFilter('result', v)} />
+        </FilterField>
+        <FilterField label="Position">
+          <Segmented fill value={filters.position} options={POSITION_OPTIONS} onChange={(v) => setFilter('position', v)} />
+        </FilterField>
+        <div className="grid grid-cols-2 gap-3">
+          <FilterField label="Préflop">
+            <Select
+              className={mobileSelectClass}
+              label="Situation préflop"
+              value={filters.preflop}
+              options={PREFLOP_OPTIONS}
+              onChange={(v) => setFilter('preflop', v)}
+            />
+          </FilterField>
+          <FilterField label="Fin de main">
+            <Select
+              className={mobileSelectClass}
+              label="Fin de la main"
+              value={filters.ending}
+              options={ENDING_OPTIONS}
+              onChange={(v) => setFilter('ending', v)}
+            />
+          </FilterField>
+          <FilterField label="Pot">
+            <Select
+              className={mobileSelectClass}
+              label="Taille du pot"
+              value={filters.pot}
+              options={POT_OPTIONS}
+              onChange={(v) => setFilter('pot', v)}
+            />
+          </FilterField>
+          <FilterField label="Tri">
+            <Select
+              className={mobileSelectClass}
+              label="Tri"
+              value={`${filters.sortKey}-${filters.sortDir}` as const}
+              options={SORT_OPTIONS}
+              onChange={(v) => {
+                const [key, dir] = v.split('-') as [SortKey, SortDir];
+                setFilter('sortKey', key);
+                setFilter('sortDir', dir);
+              }}
+            />
+          </FilterField>
+        </div>
+        <Button variant="outline" size="lg" className="rounded-xl" onClick={resetFilters} disabled={activeCount === 0}>
+          <RotateCcw />
+          Réinitialiser les filtres
+        </Button>
+      </FilterPanel>
+
+      <Card className="flex flex-col gap-3 p-4 max-md:hidden">
         <div className="flex flex-wrap items-center gap-3">
           <Segmented value={filters.date} options={HAND_DATE_OPTIONS} onChange={(v) => setFilter('date', v)} />
           {filters.date === 'custom' && (
@@ -198,9 +302,10 @@ export function HandList() {
           )}
         </span>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={randomHand} disabled={!filtered.length}>
+          <Button variant="outline" size="sm" onClick={randomHand} disabled={!filtered.length} className="max-md:h-9 max-md:rounded-full">
             <Shuffle />
-            Main au hasard
+            <span className="max-md:hidden">Main au hasard</span>
+            <span className="md:hidden">Au hasard</span>
           </Button>
           {pageCount > 1 && (
           <div className="flex items-center gap-1">
@@ -224,7 +329,7 @@ export function HandList() {
         </div>
       </div>
 
-      <Card>
+      <Card className="max-md:border-0 max-md:bg-transparent max-md:shadow-none">
         {visible.length ? (
           <HandTable hands={visible} selectedId={selectedHandId} onSelect={openHand} />
         ) : (

@@ -21,10 +21,12 @@ function StatLabel({ label, info, align }: { label: string; info: string; align?
 
 function KeyStat({ label, value, hint, tone, info }: { label: string; value: string; hint: string; tone: Tone; info: string }) {
   return (
-    <Card className="flex flex-col justify-center px-4 py-3">
+    <Card className="flex min-w-0 flex-col justify-center px-4 py-3 max-md:rounded-2xl">
       <StatLabel label={label} info={info} align="start" />
-      <span className={cn('text-3xl font-semibold leading-tight tabular-nums', toneClass(tone))}>{value}</span>
-      <span className="text-xs text-muted-foreground">{hint}</span>
+      <span className={cn('text-3xl font-semibold leading-tight tabular-nums max-md:whitespace-nowrap max-md:text-xl max-md:font-bold', toneClass(tone))}>
+        {value}
+      </span>
+      <span className="text-xs text-muted-foreground max-md:truncate">{hint}</span>
     </Card>
   );
 }
@@ -89,11 +91,11 @@ function primaryStats(stats: DashboardStats, unit: Unit, mode: StatsMode) {
 
 export function StatCards({ stats, unit, mode }: { stats: DashboardStats; unit: Unit; mode: StatsMode }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2.5fr)]">
+    <div className="grid gap-3 max-md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2.5fr)]">
       {primaryStats(stats, unit, mode).map((s) => (
         <KeyStat key={s.label} {...s} />
       ))}
-      <Card className="grid grid-cols-3 divide-x sm:grid-cols-6">
+      <Card className="grid grid-cols-3 divide-x sm:grid-cols-6 max-md:col-span-2 max-md:rounded-2xl max-sm:[&>*:nth-child(-n+3)]:border-b">
         <MiniStat label="VPIP" value={formatNumber(stats.vpip, 1, ' %')} info={INFO.vpip} align="start" />
         <MiniStat label="PFR" value={formatNumber(stats.pfr, 1, ' %')} info={INFO.pfr} />
         <MiniStat label="3Bet" value={formatNumber(stats.threeBet, 1, ' %')} info={INFO.threeBet} />

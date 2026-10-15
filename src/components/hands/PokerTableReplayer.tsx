@@ -56,7 +56,7 @@ const SPEEDS = [
 ] as const;
 type Speed = (typeof SPEEDS)[number]['value'];
 
-const STREETS: { value: ReplayStreet; label: string }[] = [
+export const STREETS: { value: ReplayStreet; label: string }[] = [
   { value: 'preflop', label: 'Préflop' },
   { value: 'flop', label: 'Flop' },
   { value: 'turn', label: 'Turn' },
@@ -86,7 +86,7 @@ const onTable = (angle: number, rx: number, ry: number): Point => ({
   y: 50 + ry * squircle(Math.sin(angle)),
 });
 
-function playStepSound(step: ReplayerStep) {
+export function playStepSound(step: ReplayerStep) {
   switch (step.kind) {
     case 'init':
       return playHoleCards();
@@ -554,7 +554,7 @@ const STREET_NAMES: Record<ReplayStreet, string> = {
   showdown: 'Showdown',
 };
 
-function stepStyle(step: ReplayerStep): { color: string; label: string } {
+export function stepStyle(step: ReplayerStep): { color: string; label: string } {
   if (step.kind === 'init') return { color: 'bg-zinc-400', label: 'Distribution' };
   if (step.kind === 'street') return { color: 'bg-zinc-400', label: STREET_NAMES[step.street] };
   if (step.kind === 'showdown') return { color: 'bg-zinc-400', label: 'Abattage' };
@@ -574,7 +574,7 @@ function stepStyle(step: ReplayerStep): { color: string; label: string } {
   }
 }
 
-function Chips() {
+export function Chips() {
   return (
     <span className="relative inline-block h-4 w-4">
       <span className="absolute inset-0 translate-y-[3px] rounded-full border-2 border-dashed border-white bg-red-700" />
@@ -589,11 +589,14 @@ interface SeatProps {
   active: boolean;
   showResult: boolean;
   fmt: (v: number) => string;
+  /** Smaller cards and plate for the portrait (phone) table. */
+  compact?: boolean;
 }
 
-function Seat({ player: p, point, active, showResult, fmt }: SeatProps) {
+export function Seat({ player: p, point, active, showResult, fmt, compact }: SeatProps) {
   const faceDown = p.inHand && !p.folded && !p.cards;
   const winner = p.won > 0;
+  const cardSize = compact ? 'sm' : 'md';
   return (
     <div
       className={cn(
@@ -602,27 +605,37 @@ function Seat({ player: p, point, active, showResult, fmt }: SeatProps) {
       )}
       style={at(point)}
     >
-      <div className="relative z-0 -mb-3 flex h-[62px] -space-x-4">
+      <div className={cn('relative z-0 flex', compact ? '-mb-2 h-[45px] -space-x-3' : '-mb-3 h-[62px] -space-x-4')}>
         {p.cards
-          ? p.cards.map((c) => <PlayingCard key={c} card={c} className="animate-deal" />)
-          : faceDown && [0, 1].map((i) => <PlayingCard key={i} faceDown className="animate-deal" />)}
+          ? p.cards.map((c) => <PlayingCard key={c} card={c} size={cardSize} className="animate-deal" />)
+          : faceDown && [0, 1].map((i) => <PlayingCard key={i} faceDown size={cardSize} className="animate-deal" />)}
       </div>
       <div
         className={cn(
-          'relative z-10 min-w-[118px] max-w-[150px] rounded-lg border border-white/10 bg-zinc-900/95 px-3 py-1 text-center shadow-lg ring-2 transition-all',
+          'relative z-10 rounded-lg border border-white/10 bg-zinc-900/95 text-center shadow-lg ring-2 transition-all',
+          compact ? 'w-[80px] px-1.5 py-0.5' : 'min-w-[118px] max-w-[150px] px-3 py-1',
           active ? 'ring-amber-400' : winner && showResult ? 'ring-emerald-400' : 'ring-transparent',
           p.isHero && 'bg-zinc-800',
         )}
       >
         {p.position && (
-          <span className="absolute -left-2 -top-2 rounded bg-sky-700 px-1 text-[9px] font-bold text-white">
+          <span
+            className={cn(
+              'absolute rounded bg-sky-700 px-1 font-bold text-white',
+              compact ? '-left-1.5 -top-2 text-[8px]' : '-left-2 -top-2 text-[9px]',
+            )}
+          >
             {p.position}
           </span>
         )}
-        <div className={cn('truncate text-xs font-semibold', p.isHero ? 'text-amber-300' : 'text-white')}>{p.name}</div>
-        <div className="text-xs tabular-nums text-zinc-300">{p.allIn && p.stack <= 0 ? 'All-in' : fmt(p.stack)}</div>
+        <div className={cn('truncate font-semibold', compact ? 'text-[11px]' : 'text-xs', p.isHero ? 'text-amber-300' : 'text-white')}>
+          {p.name}
+        </div>
+        <div className={cn('tabular-nums text-zinc-300', compact ? 'text-[11px]' : 'text-xs')}>
+          {p.allIn && p.stack <= 0 ? 'All-in' : fmt(p.stack)}
+        </div>
       </div>
-      <div className="mt-0.5 h-4 text-[10px] font-semibold uppercase tracking-wide">
+      <div className={cn('mt-0.5 h-4 font-semibold uppercase tracking-wide', compact ? 'text-[9px]' : 'text-[10px]')}>
         {!p.inHand ? (
           <span className="text-white/60">Absent</span>
         ) : p.folded ? (

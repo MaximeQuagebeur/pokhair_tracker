@@ -70,9 +70,9 @@ function SyncIndicator() {
       );
     case 'error':
       return (
-        <span className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400" title={error ?? undefined}>
-          <AlertTriangle className="size-4" />
-          Erreur de synchronisation
+        <span className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+          <AlertTriangle className="size-4 shrink-0" />
+          {error ?? 'Erreur de synchronisation'}
         </span>
       );
     case 'idle':
@@ -255,8 +255,8 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Réglages</h1>
+    <div className="mx-auto flex max-w-3xl flex-col gap-6 max-md:gap-4 max-md:[&>div]:rounded-2xl">
+      <h1 className="text-2xl font-semibold tracking-tight max-md:text-[28px] max-md:font-bold">Réglages</h1>
 
       <Card>
         <CardHeader>

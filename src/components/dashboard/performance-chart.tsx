@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoverTooltip } from '@/components/ui/tooltip';
+import { useIsMobile } from '@/hooks/use-is-mobile';
 import type { CurvePoint, Unit } from '@/lib/poker/stats';
 import { cn, formatAmount } from '@/lib/utils';
 
@@ -54,6 +55,7 @@ interface PerformanceChartProps {
 
 export function PerformanceChart({ data, unit, xAxis, showDates: byDate = false, series }: PerformanceChartProps) {
   const [hidden, setHidden] = useState<Set<SeriesKey>>(new Set());
+  const mobile = useIsMobile();
   const last = data[data.length - 1];
   const visibleSeries = SERIES.filter((s) => !series || series.includes(s.key));
   const xLabel = xAxis === 'hand' ? 'Main' : 'Tournoi';
@@ -81,53 +83,60 @@ export function PerformanceChart({ data, unit, xAxis, showDates: byDate = false,
     });
 
   return (
-    <Card>
-      <CardHeader className="flex-row items-start justify-between space-y-0">
+    <Card className="max-md:rounded-2xl">
+      <CardHeader className="flex-row items-start justify-between space-y-0 max-md:flex-col max-md:gap-3 max-md:p-4">
         <div className="space-y-1.5">
-          <CardTitle>Graphique de performance</CardTitle>
+          <CardTitle className="max-md:text-base">
+            <span className="md:hidden">Performance</span>
+            <span className="max-md:hidden">Graphique de performance</span>
+          </CardTitle>
           <CardDescription>
             Gains cumulés par {xAxis === 'hand' ? 'nombre de mains jouées' : 'tournoi joué'}
           </CardDescription>
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-wrap justify-end gap-2 max-md:grid max-md:w-full max-md:grid-cols-2">
           {visibleSeries.map((s) => (
             <HoverTooltip
               key={s.key}
               content={xAxis === 'tournament' && s.key === 'net' ? TOURNAMENT_NET_INFO : s.info}
               align="end"
+              className="max-md:w-full max-md:min-w-0"
             >
               <button
                 type="button"
                 onClick={() => toggle(s.key)}
                 className={cn(
                   'flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-opacity',
+                  'max-md:w-full max-md:min-w-0 max-md:rounded-xl max-md:py-2',
                   hidden.has(s.key) && 'opacity-40',
                 )}
               >
-                <span className="size-2.5 rounded-full" style={{ backgroundColor: s.color }} />
-                {s.label}
-                {last && <span className="tabular-nums text-muted-foreground">{formatAmount(last[s.key], unit)}</span>}
+                <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                <span className="max-md:truncate">{s.label}</span>
+                {last && (
+                  <span className="tabular-nums text-muted-foreground max-md:ml-auto">{formatAmount(last[s.key], unit)}</span>
+                )}
               </button>
             </HoverTooltip>
           ))}
         </div>
       </CardHeader>
-      <CardContent className="h-[520px]">
+      <CardContent className="h-[520px] max-md:h-[300px] max-md:px-1 max-md:pb-3">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 8, bottom: 8, left: 16 }}>
+          <LineChart data={data} margin={mobile ? { top: 4, right: 0, bottom: 0, left: 4 } : { top: 8, right: 8, bottom: 8, left: 16 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               dataKey="x"
               type="number"
               domain={[0, 'dataMax']}
               minTickGap={24}
-              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: mobile ? 10 : 12 }}
               tickFormatter={formatTick}
             />
             <YAxis
               orientation="right"
-              width={80}
-              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }}
+              width={mobile ? 58 : 80}
+              tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: mobile ? 10 : 12 }}
               tickFormatter={(v: number) => formatAmount(v, unit)}
             />
             <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeOpacity={0.5} />

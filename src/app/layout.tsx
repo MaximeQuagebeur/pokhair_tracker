@@ -37,14 +37,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <SyncProvider>
-          <div className="flex h-dvh overflow-hidden">
+          {/* Phones scroll the document (native iOS feel); desktop keeps the fixed sidebar layout. */}
+          <div className="flex md:h-dvh md:overflow-hidden">
             <Sidebar />
             <div className="flex min-w-0 flex-1 flex-col">
-              <main className="flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(5rem+env(safe-area-inset-bottom))] pt-[calc(1.25rem+env(safe-area-inset-top))] md:py-5">
+              <main className="flex-1 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] md:overflow-y-auto md:py-5">
                 {children}
               </main>
             </div>
           </div>
+          {/* Blurred strip behind the translucent iOS status bar. */}
+          <div className="pointer-events-none fixed inset-x-0 top-0 z-40 h-[env(safe-area-inset-top)] bg-background/70 backdrop-blur-xl md:hidden" />
           <BottomNav />
         </SyncProvider>
       </body>

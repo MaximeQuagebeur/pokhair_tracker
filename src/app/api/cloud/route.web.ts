@@ -11,9 +11,7 @@ function safeEqual(a: string, b: string) {
   return diff === 0;
 }
 
-function authorized(request: Request) {
-  const key = process.env.APP_ACCESS_KEY;
-  if (!key) return false;
+function authorized(request: Request, key: string) {
   const header = request.headers.get('authorization') ?? '';
   return safeEqual(header, `Bearer ${key}`);
 }
@@ -26,7 +24,9 @@ const json = (body: unknown, status = 200) =>
  * GET /api/cloud?kind=text&id=<handId>                      → raw hand history (replayer)
  */
 export async function GET(request: Request) {
-  if (!authorized(request)) return json({ error: 'Clé d’accès invalide' }, 401);
+  const key = process.env.APP_ACCESS_KEY?.trim();
+  if (!key) return json({ error: 'APP_ACCESS_KEY non configurée sur Vercel (redéployez après l’ajout)' }, 503);
+  if (!authorized(request, key)) return json({ error: 'Clé d’accès invalide' }, 401);
   const params = new URL(request.url).searchParams;
   const kind = params.get('kind');
   const id = params.get('id') ?? '';

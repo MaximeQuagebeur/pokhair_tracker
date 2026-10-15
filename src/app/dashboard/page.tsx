@@ -9,9 +9,10 @@ import { PerformanceChart } from '@/components/dashboard/performance-chart';
 import { StatCards, type StatsMode } from '@/components/dashboard/stat-cards';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { FilterField, FilterPanel, mobileSelectClass } from '@/components/ui/filter-panel';
 import { Segmented } from '@/components/ui/segmented';
 import { db } from '@/lib/db';
-import { availableLimits, filterHands, filterTournaments } from '@/lib/poker/filters';
+import { availableLimits, DATE_OPTIONS, filterHands, filterTournaments, GAME_OPTIONS } from '@/lib/poker/filters';
 import { buildCurves, buildTournamentCurve, computeStats, type Unit } from '@/lib/poker/stats';
 import { useDashboardStore } from '@/stores/useDashboardStore';
 
@@ -60,29 +61,38 @@ export default function DashboardPage() {
   );
   const tournamentsHiddenInBB = effectiveUnit === 'bb' && filteredTournaments.length > 0;
   const isEmpty = hands?.length === 0 && tournaments?.length === 0;
+  const axisOptions = [
+    { value: 'count', label: mode === 'tournament' ? 'Tournois' : 'Mains' },
+    { value: 'date', label: 'Dates' },
+  ] as const;
+  const summary = [
+    DATE_OPTIONS.find((o) => o.value === filters.date)?.label,
+    GAME_OPTIONS.find((o) => o.value === filters.game)?.label,
+    limit === 'all' ? 'Toutes limites' : limit,
+    mode !== 'tournament' && (unit === 'eur' ? '€' : 'BB'),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const activeCount = [filters.date !== 'all', filters.game !== 'all', limit !== 'all'].filter(Boolean).length;
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 max-md:gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Statistiques & Graphiques</h1>
+          <h1 className="text-2xl font-semibold tracking-tight max-md:text-[28px] max-md:font-bold">
+            <span className="md:hidden">Statistiques</span>
+            <span className="max-md:hidden">Statistiques & Graphiques</span>
+          </h1>
           <p className="text-sm text-muted-foreground">Winamax</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Segmented
-            value={axis}
-            options={[
-              { value: 'count', label: mode === 'tournament' ? 'Tournois' : 'Mains' },
-              { value: 'date', label: 'Dates' },
-            ]}
-            onChange={setAxis}
-          />
+        <div className="flex items-center gap-3 max-md:hidden">
+          <Segmented value={axis} options={axisOptions} onChange={setAxis} />
           {mode !== 'tournament' && <Segmented value={unit} options={UNIT_OPTIONS} onChange={setUnit} />}
         </div>
       </div>
 
       {isEmpty ? (
-        <Card className="flex flex-col items-center gap-4 p-12 text-center">
+        <Card className="flex flex-col items-center gap-4 p-12 text-center max-md:rounded-2xl max-md:p-8">
           <p className="text-muted-foreground">
             Aucune main importée. Sélectionnez votre dossier d&apos;historique Winamax dans les réglages pour commencer.
           </p>
@@ -93,7 +103,47 @@ export default function DashboardPage() {
         </Card>
       ) : (
         <>
-          <FiltersBar filters={{ ...filters, limit }} limits={limits} onChange={setFilters} />
+          <div className="max-md:hidden">
+            <FiltersBar filters={{ ...filters, limit }} limits={limits} onChange={setFilters} />
+          </div>
+          <FilterPanel className="md:hidden" summary={summary} activeCount={activeCount}>
+            <FilterField label="Période">
+              <Segmented fill value={filters.date} options={DATE_OPTIONS} onChange={(date) => setFilters({ ...filters, date })} />
+            </FilterField>
+            <FilterField label="Jeu">
+              <Segmented
+                fill
+                value={filters.game}
+                options={GAME_OPTIONS}
+                onChange={(game) => setFilters({ ...filters, game, limit: 'all' })}
+              />
+            </FilterField>
+            <FilterField label="Limite">
+              <select
+                value={limit}
+                onChange={(e) => setFilters({ ...filters, limit: e.target.value })}
+                className={mobileSelectClass}
+                aria-label="Limite"
+              >
+                <option value="all">Toutes les limites</option>
+                {limits.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </FilterField>
+            <div className="grid grid-cols-2 gap-3">
+              <FilterField label="Axe du graphique">
+                <Segmented fill value={axis} options={axisOptions} onChange={setAxis} />
+              </FilterField>
+              {mode !== 'tournament' && (
+                <FilterField label="Unité">
+                  <Segmented fill value={unit} options={UNIT_OPTIONS} onChange={setUnit} />
+                </FilterField>
+              )}
+            </div>
+          </FilterPanel>
           {tournamentsHiddenInBB && (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
               <Info className="size-3.5" />
@@ -101,7 +151,7 @@ export default function DashboardPage() {
             </p>
           )}
           {filtered.length === 0 && filteredTournaments.length === 0 ? (
-            <Card className="p-12 text-center text-muted-foreground">Aucune main pour ces filtres.</Card>
+            <Card className="p-12 text-center text-muted-foreground max-md:rounded-2xl max-md:p-8">Aucune main pour ces filtres.</Card>
           ) : (
             <>
               <StatCards stats={stats} unit={effectiveUnit} mode={mode} />
