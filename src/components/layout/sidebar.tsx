@@ -40,7 +40,7 @@ export function Sidebar() {
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col border-r bg-card/40">
+    <aside className="hidden w-60 shrink-0 flex-col border-r bg-card/40 md:flex">
       <div className="flex h-14 items-center gap-2 border-b px-5">
         <div className="flex size-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <Spade className="size-4" />

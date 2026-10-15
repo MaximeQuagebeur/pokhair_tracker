@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'elect
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { cloudStatus, configureCloud, disconnectCloud, pushToCloud, sanitizePayload } from './cloud';
 
 const isDev = process.env.ELECTRON_DEV === '1';
 const DEV_URL = 'http://localhost:3000/dashboard/';
@@ -126,6 +127,13 @@ function registerIpc() {
     }
     return fs.promises.readFile(resolved, 'utf-8');
   });
+
+  ipcMain.handle('cloud:status', () => cloudStatus());
+  ipcMain.handle('cloud:configure', (_e, url: unknown, token: unknown) =>
+    configureCloud(String(url ?? '').trim(), String(token ?? '').trim()),
+  );
+  ipcMain.handle('cloud:disconnect', () => disconnectCloud());
+  ipcMain.handle('cloud:push', (_e, payload: unknown) => pushToCloud(sanitizePayload(payload)));
 }
 
 function createWindow() {

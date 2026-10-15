@@ -79,17 +79,31 @@ class PokhairDB extends Dexie {
 
 export const db = new PokhairDB();
 
-/** Parses a history file and upserts its hands / tournament results (idempotent by id). */
+const sameRecord = (a: unknown, b: unknown) => a !== undefined && JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Parses a history file and upserts its hands / tournament results (idempotent by id).
+ * Returns only the records that are new or changed, to be pushed to the cloud.
+ */
 export async function ingestFile(file: { path: string; size: number; mtimeMs: number }, text: string) {
   const { hands, texts, tournaments, errors } = parseWinamaxFile(text, file.path);
   if (errors.length) console.warn(`[parser] ${file.path}`, errors);
-  await db.transaction('rw', [db.hands, db.handTexts, db.tournaments, db.files], async () => {
+  return db.transaction('rw', [db.hands, db.handTexts, db.tournaments, db.files], async () => {
+    const [oldHands, oldTexts, oldTournaments] = await Promise.all([
+      db.hands.bulkGet(hands.map((h) => h.id)),
+      db.handTexts.bulkGet(texts.map((t) => t.id)),
+      db.tournaments.bulkGet(tournaments.map((t) => t.id)),
+    ]);
     await db.hands.bulkPut(hands);
     await db.handTexts.bulkPut(texts);
     await db.tournaments.bulkPut(tournaments);
     await db.files.put({ ...file, hands: hands.length, tournaments: tournaments.length, parsedAt: Date.now() });
+    return {
+      hands: hands.filter((h, i) => !sameRecord(oldHands[i], h)),
+      texts: texts.filter((t, i) => oldTexts[i]?.text !== t.text),
+      tournaments: tournaments.filter((t, i) => !sameRecord(oldTournaments[i], t)),
+    };
   });
-  return hands.length;
 }
 
 export async function clearDatabase() {

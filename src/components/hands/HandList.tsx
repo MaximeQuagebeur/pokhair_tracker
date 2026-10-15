@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronLeft, ChevronRight, FolderOpen, RotateCcw, Shuffle } from 'lucide-react';
 import { HandTable } from '@/components/hands/HandTable';
@@ -53,11 +54,34 @@ function Select<T extends string>({
   );
 }
 
+const MOBILE_QUERY = '(max-width: 767px)';
+
+/** `null` until mounted, so the desktop modal never flashes on phones. */
+function useIsMobile() {
+  const [mobile, setMobile] = useState<boolean | null>(null);
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const update = () => setMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+  return mobile;
+}
+
 export function HandList() {
   const { chooseFolder } = useSync();
   const { filters, setFilter, resetFilters, selectedHandId, selectHand } = useHandFilterStore();
   const hands = useLiveQuery(() => db.hands.toArray(), []);
   const [page, setPage] = useState(0);
+  const router = useRouter();
+  const isMobile = useIsMobile();
+
+  const openHand = (id: string) => {
+    selectHand(id);
+    // Phones use the portrait replayer page instead of the 16:9 modal.
+    if (window.matchMedia(MOBILE_QUERY).matches) router.push('/replayer/');
+  };
 
   const all = useMemo(() => hands ?? [], [hands]);
   const limits = useMemo(() => availableLimits(all, [], filters.game), [all, filters.game]);
@@ -202,13 +226,13 @@ export function HandList() {
 
       <Card>
         {visible.length ? (
-          <HandTable hands={visible} selectedId={selectedHandId} onSelect={selectHand} />
+          <HandTable hands={visible} selectedId={selectedHandId} onSelect={openHand} />
         ) : (
           <p className="p-12 text-center text-muted-foreground">{hands ? 'Aucune main pour ces filtres.' : 'Chargement…'}</p>
         )}
       </Card>
 
-      {selected && (
+      {selected && isMobile === false && (
         <PokerTableReplayer
           hand={selected}
           counter={selectedIndex >= 0 ? `${selectedIndex + 1} / ${filtered.length}` : undefined}
