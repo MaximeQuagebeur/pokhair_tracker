@@ -17,7 +17,7 @@ interface DashboardState {
 export const useDashboardStore = create<DashboardState>()(
   persist(
     (set) => ({
-      filters: { date: 'all', game: 'all', limit: 'all' },
+      filters: { date: 'all', game: 'all', limit: 'all', lastN: 0 },
       unit: 'eur',
       axis: 'count',
       setFilters: (filters) => set({ filters }),

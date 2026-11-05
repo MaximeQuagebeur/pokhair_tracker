@@ -7,6 +7,8 @@ import { cn, formatNumber, formatStake } from '@/lib/utils';
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'medium' });
 const shortDateFormat = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 const signed = (text: string, value: number) => (value > 0 ? `+${text}` : text);
+// Records synced from an older parser have no board.
+const flopOf = (h: HandRecord) => (h.board?.length >= 3 ? h.board.slice(0, 3) : null);
 
 interface HandTableProps {
   hands: HandRecord[];
@@ -29,6 +31,7 @@ function MobileHandList({ hands, selectedId, onSelect }: HandTableProps) {
       {hands.map((h) => {
         const isCash = h.gameType === 'cash';
         const bb = netBB(h);
+        const flop = flopOf(h);
         return (
           <li key={h.id}>
             <button
@@ -55,6 +58,13 @@ function MobileHandList({ hands, selectedId, onSelect }: HandTableProps) {
                   {h.limit} · {shortDateFormat.format(h.timestamp)}
                   {h.showdown && ' · SD'}
                 </div>
+                {flop && (
+                  <div className="mt-1 flex gap-0.5">
+                    {flop.map((c) => (
+                      <MiniCard key={c} card={c} />
+                    ))}
+                  </div>
+                )}
               </div>
               <div
                 className={cn(
@@ -83,6 +93,7 @@ function DesktopHandTable({ hands, selectedId, onSelect }: HandTableProps) {
             <th className="px-3 py-2 font-medium">Date & Heure</th>
             <th className="px-3 py-2 font-medium">Table / Limite</th>
             <th className="px-3 py-2 font-medium">Cartes</th>
+            <th className="px-3 py-2 font-medium">Flop</th>
             <th className="px-3 py-2 font-medium">Position</th>
             <th className="px-3 py-2 font-medium">Action préflop</th>
             <th className="px-3 py-2 font-medium">Showdown</th>
@@ -94,6 +105,7 @@ function DesktopHandTable({ hands, selectedId, onSelect }: HandTableProps) {
           {hands.map((h) => {
             const isCash = h.gameType === 'cash';
             const bb = netBB(h);
+            const flop = flopOf(h);
             return (
               <tr
                 key={h.id}
@@ -116,6 +128,17 @@ function DesktopHandTable({ hands, selectedId, onSelect }: HandTableProps) {
                       <MiniCard key={c} card={c} />
                     ))}
                   </div>
+                </td>
+                <td className="px-3 py-2">
+                  {flop ? (
+                    <div className="flex gap-0.5">
+                      {flop.map((c) => (
+                        <MiniCard key={c} card={c} />
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </td>
                 <td className="px-3 py-2 font-medium">{h.heroPosition ?? '—'}</td>
                 <td className="px-3 py-2 font-mono text-xs">{h.preflopActions || '—'}</td>

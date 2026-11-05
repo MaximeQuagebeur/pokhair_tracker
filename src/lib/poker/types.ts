@@ -74,7 +74,18 @@ export interface HandRecord {
   preflopActions: string;
   /** Hero open-raised first in from CO / BTN / SB. */
   steal: boolean;
+  /** Hero open-raised and acted facing a 3-bet. */
+  threeBetFaced: boolean;
   foldToThreeBet: boolean;
+  /** Hero acted facing the flop continuation bet of the preflop raiser. */
+  cbetFaced: boolean;
+  foldToCbet: boolean;
+  /** Final board ([] when the hand ended preflop). */
+  board: string[];
+  /** Players still in the hand when preflop action ended. */
+  playersInPot: number;
+  /** Hero's share of the rake (pots won), same unit as `net`. */
+  heroRake: number;
   /** Hero was all-in at some point of the hand (bet, raise, call or blind). */
   heroAllIn: boolean;
   sourceFile: string;

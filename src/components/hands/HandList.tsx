@@ -3,15 +3,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronLeft, ChevronRight, FolderOpen, RotateCcw, Shuffle } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Copy, FolderOpen, Grid3x3, RotateCcw, Shuffle } from 'lucide-react';
 import { HandTable } from '@/components/hands/HandTable';
 import { PokerTableReplayer } from '@/components/hands/PokerTableReplayer';
+import { StartingHandsPicker } from '@/components/hands/StartingHandsPicker';
 import { useSync } from '@/components/providers/sync-provider';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FilterField, FilterPanel, mobileSelectClass } from '@/components/ui/filter-panel';
+import { LastHandsInput } from '@/components/ui/last-hands-input';
 import { Segmented } from '@/components/ui/segmented';
 import { MOBILE_QUERY, useIsMobile } from '@/hooks/use-is-mobile';
+import { fetchHandTexts, isCloudWeb } from '@/lib/cloud/client';
 import { db } from '@/lib/db';
 import { availableLimits, GAME_OPTIONS } from '@/lib/poker/filters';
 import {
@@ -19,6 +22,7 @@ import {
   ENDING_OPTIONS,
   HAND_DATE_OPTIONS,
   netBB,
+  PLAYERS_OPTIONS,
   POSITION_OPTIONS,
   POT_OPTIONS,
   PREFLOP_OPTIONS,
@@ -59,15 +63,30 @@ function Select<T extends string>({
   );
 }
 
-const FILTER_KEYS = ['date', 'game', 'limit', 'result', 'position', 'preflop', 'ending', 'pot'] as const;
+const FILTER_KEYS = ['date', 'game', 'limit', 'result', 'position', 'preflop', 'ending', 'pot', 'players', 'lastN'] as const;
 const labelOf = (options: readonly { value: string; label: string }[], value: string) =>
   options.find((o) => o.value === value)?.label ?? value;
+const HAND_SEPARATOR = '\n\n\n';
+
+type CopyState = { status: 'idle' | 'busy' | 'error' } | { status: 'done'; count: number };
+
+/** Raw Winamax histories of the hands, in list order (the web version downloads missing ones). */
+async function loadHandTexts(ids: string[]): Promise<string[]> {
+  const local = await db.handTexts.bulkGet(ids);
+  const byId = new Map<string, string>();
+  local.forEach((t) => t && byId.set(t.id, t.text));
+  const missing = ids.filter((id) => !byId.has(id));
+  if (missing.length && isCloudWeb()) for (const t of await fetchHandTexts(missing)) byId.set(t.id, t.text);
+  return ids.flatMap((id) => byId.get(id) ?? []);
+}
 
 export function HandList() {
   const { chooseFolder } = useSync();
   const { filters, setFilter, resetFilters, selectedHandId, selectHand } = useHandFilterStore();
   const hands = useLiveQuery(() => db.hands.toArray(), []);
   const [page, setPage] = useState(0);
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [copy, setCopy] = useState<CopyState>({ status: 'idle' });
   const router = useRouter();
   const isMobile = useIsMobile();
 
@@ -93,6 +112,24 @@ export function HandList() {
     if (pool.length) openHand(pool[Math.floor(Math.random() * pool.length)].id);
   };
   useEffect(() => setPage(0), [filters]);
+  useEffect(() => setCopy({ status: 'idle' }), [filters]);
+
+  const copyAll = async () => {
+    setCopy({ status: 'busy' });
+    const texts = loadHandTexts(filtered.map((h) => h.id));
+    try {
+      try {
+        // A pending ClipboardItem keeps the click's user activation while the texts load (Safari).
+        const blob = texts.then((t) => new Blob([t.join(HAND_SEPARATOR)], { type: 'text/plain' }));
+        await navigator.clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
+      } catch {
+        await navigator.clipboard.writeText((await texts).join(HAND_SEPARATOR));
+      }
+      setCopy({ status: 'done', count: (await texts).length });
+    } catch {
+      setCopy({ status: 'error' });
+    }
+  };
   // Keep the replayed hand visible in the list while navigating hand by hand.
   useEffect(() => {
     if (selectedIndex >= 0) setPage(Math.floor(selectedIndex / PAGE_SIZE));
@@ -103,13 +140,18 @@ export function HandList() {
     return { net: cash.reduce((a, h) => a + h.net, 0), bb: cash.reduce((a, h) => a + netBB(h), 0), cash: cash.length };
   }, [filtered]);
 
-  const activeCount = FILTER_KEYS.filter((k) => (k === 'limit' ? limit : filters[k]) !== DEFAULT_HAND_SEARCH[k]).length;
+  const activeCount =
+    FILTER_KEYS.filter((k) => (k === 'limit' ? limit : filters[k]) !== DEFAULT_HAND_SEARCH[k]).length +
+    (filters.startingHands.length ? 1 : 0);
   const summary = [
     labelOf(HAND_DATE_OPTIONS, filters.date),
     labelOf(GAME_OPTIONS, filters.game),
     limit !== 'all' && limit,
+    filters.lastN > 0 && `${filters.lastN.toLocaleString('fr-FR')} dernières`,
     filters.result !== 'all' && labelOf(RESULT_OPTIONS, filters.result),
     filters.position !== 'all' && filters.position,
+    filters.startingHands.length > 0 && `${filters.startingHands.length} mains de départ`,
+    filters.players !== 'all' && labelOf(PLAYERS_OPTIONS, filters.players),
     filters.preflop !== 'all' && labelOf(PREFLOP_OPTIONS, filters.preflop),
     filters.ending !== 'all' && labelOf(ENDING_OPTIONS, filters.ending),
     filters.pot !== 'all' && labelOf(POT_OPTIONS, filters.pot),
@@ -173,11 +215,27 @@ export function HandList() {
             ))}
           </select>
         </FilterField>
+        <FilterField label="Dernières mains">
+          <LastHandsInput className={mobileSelectClass} value={filters.lastN} onChange={(n) => setFilter('lastN', n)} />
+        </FilterField>
         <FilterField label="Résultat">
           <Segmented fill value={filters.result} options={RESULT_OPTIONS} onChange={(v) => setFilter('result', v)} />
         </FilterField>
         <FilterField label="Position">
           <Segmented fill value={filters.position} options={POSITION_OPTIONS} onChange={(v) => setFilter('position', v)} />
+        </FilterField>
+        <FilterField label="Joueurs dans le coup">
+          <Segmented fill value={filters.players} options={PLAYERS_OPTIONS} onChange={(v) => setFilter('players', v)} />
+        </FilterField>
+        <FilterField label={`Mains de départ${filters.startingHands.length ? ` (${filters.startingHands.length})` : ''}`}>
+          {rangeOpen ? (
+            <StartingHandsPicker fill value={filters.startingHands} onChange={(v) => setFilter('startingHands', v)} />
+          ) : (
+            <Button variant="outline" size="lg" className="rounded-xl" onClick={() => setRangeOpen(true)}>
+              <Grid3x3 />
+              Choisir des mains
+            </Button>
+          )}
         </FilterField>
         <div className="grid grid-cols-2 gap-3">
           <FilterField label="Préflop">
@@ -263,12 +321,28 @@ export function HandList() {
               </option>
             ))}
           </select>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            Dernières
+            <LastHandsInput value={filters.lastN} onChange={(n) => setFilter('lastN', n)} />
+            mains
+          </label>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Segmented value={filters.result} options={RESULT_OPTIONS} onChange={(v) => setFilter('result', v)} />
           <Segmented value={filters.position} options={POSITION_OPTIONS} onChange={(v) => setFilter('position', v)} />
+          <Segmented value={filters.players} options={PLAYERS_OPTIONS} onChange={(v) => setFilter('players', v)} />
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant={rangeOpen || filters.startingHands.length ? 'secondary' : 'outline'}
+            size="sm"
+            className="h-[34px]"
+            onClick={() => setRangeOpen((o) => !o)}
+            aria-expanded={rangeOpen}
+          >
+            <Grid3x3 />
+            Mains de départ{filters.startingHands.length ? ` (${filters.startingHands.length})` : ''}
+          </Button>
           <Select label="Situation préflop" value={filters.preflop} options={PREFLOP_OPTIONS} onChange={(v) => setFilter('preflop', v)} />
           <Select label="Fin de la main" value={filters.ending} options={ENDING_OPTIONS} onChange={(v) => setFilter('ending', v)} />
           <Select label="Taille du pot" value={filters.pot} options={POT_OPTIONS} onChange={(v) => setFilter('pot', v)} />
@@ -287,6 +361,7 @@ export function HandList() {
             Réinitialiser
           </Button>
         </div>
+        {rangeOpen && <StartingHandsPicker value={filters.startingHands} onChange={(v) => setFilter('startingHands', v)} />}
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
@@ -302,6 +377,28 @@ export function HandList() {
           )}
         </span>
         <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyAll}
+            disabled={!filtered.length || copy.status === 'busy'}
+            title="Copier l'historique Winamax brut de toutes les mains filtrées"
+            className="max-md:h-9 max-md:rounded-full"
+          >
+            {copy.status === 'done' ? <Check /> : <Copy />}
+            {copy.status === 'busy'
+              ? 'Copie…'
+              : copy.status === 'error'
+                ? 'Échec de la copie'
+                : copy.status === 'done'
+                  ? `${copy.count.toLocaleString('fr-FR')} copiée${copy.count > 1 ? 's' : ''}`
+                  : (
+                    <>
+                      <span className="max-md:hidden">Copier les mains</span>
+                      <span className="md:hidden">Copier</span>
+                    </>
+                  )}
+          </Button>
           <Button variant="outline" size="sm" onClick={randomHand} disabled={!filtered.length} className="max-md:h-9 max-md:rounded-full">
             <Shuffle />
             <span className="max-md:hidden">Main au hasard</span>

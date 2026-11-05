@@ -1,4 +1,4 @@
-import { parseCards } from './cards';
+import { cardToString, parseCards } from './cards';
 import { buildPots, expectedWinnings } from './equity';
 import { assignPositions, STEAL_POSITIONS } from './positions';
 import type { EndStreet, GameType, HandRecord, HandText, TournamentRecord } from './types';
@@ -169,6 +169,12 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
   let heroOpenedFirstIn = false;
   let heroOpenRaised = false;
   let foldToThreeBet = false;
+  let threeBetFaced = false;
+  let cbetFaced = false;
+  let foldToCbet = false;
+  let flopBetSeen = false;
+  let cbetPending = false;
+  let playersInPot: number | null = null;
   const participants = new Set<string>();
   const contrib = new Map<string, number>();
   let streetContrib = new Map<string, number>();
@@ -212,6 +218,7 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
 
   const enterStreet = (next: Street, line: string) => {
     closeStreet();
+    if (next === 'flop') playersInPot ??= [...participants].filter((p) => !folded.has(p)).length;
     if (next === 'flop' || next === 'turn' || next === 'river') {
       streetContrib = new Map();
       board = [...line.matchAll(CARDS_GROUP_RE)].flatMap((m) => parseCards(m[1]));
@@ -298,12 +305,28 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
         stats.threeBetOpportunity = true;
         if (kind === 'raise') stats.threeBet = true;
       }
-      if (heroOpenRaised && preflopRaises === 2 && lastRaiser !== hero && kind === 'fold') foldToThreeBet = true;
+      if (heroOpenRaised && preflopRaises === 2 && lastRaiser !== hero && !threeBetFaced) {
+        threeBetFaced = true;
+        foldToThreeBet = kind === 'fold';
+      }
       if (kind === 'raise' && preflopRaises === 0) {
         heroOpenRaised = true;
         heroOpenedFirstIn = !preflopActions && preflopCalls === 0;
       }
       preflopActions += PREFLOP_LETTERS[kind];
+    }
+
+    if (street === 'flop') {
+      if (isHero && cbetPending && ['fold', 'call', 'raise'].includes(kind)) {
+        cbetFaced = true;
+        foldToCbet = kind === 'fold';
+        cbetPending = false;
+      } else if (kind === 'bet' && !flopBetSeen) {
+        cbetPending = player === lastRaiser && !isHero;
+      } else if (kind === 'raise') {
+        cbetPending = false;
+      }
+      if (kind === 'bet') flopBetSeen = true;
     }
 
     switch (kind) {
@@ -367,6 +390,7 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
 
   const heroInvested = round(invested(hero));
   const heroCollected = round(winnings.get(hero) ?? 0);
+  const totalCollected = [...winnings.values()].reduce((a, b) => a + b, 0);
   const net = round(heroCollected - heroInvested);
   const showdown = hadShowdown && !folded.has(hero);
   const positions = assignPositions(
@@ -424,7 +448,13 @@ export function parseHand(block: string, sourceFile = ''): HandRecord | null {
     endStreet,
     preflopActions,
     steal: heroOpenedFirstIn && !!heroPosition && STEAL_POSITIONS.includes(heroPosition),
+    threeBetFaced,
     foldToThreeBet,
+    cbetFaced,
+    foldToCbet,
+    board: board.map(cardToString),
+    playersInPot: playersInPot ?? [...participants].filter((p) => !folded.has(p)).length,
+    heroRake: totalCollected > 0 ? round((rake * heroCollected) / totalCollected) : 0,
     heroAllIn: allIn.has(hero),
     sourceFile,
   };

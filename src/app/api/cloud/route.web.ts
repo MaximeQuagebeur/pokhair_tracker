@@ -1,9 +1,11 @@
-import { readChanges, readHandText } from '@/lib/cloud/db';
+import { readChanges, readHandText, readHandTexts } from '@/lib/cloud/db';
 
 // Only compiled for the Vercel build (`.web.ts` page extension, see next.config.mjs).
 export const dynamic = 'force-dynamic';
 
 const PAGE_SIZE = 1000;
+const MAX_TEXT_IDS = 200;
+const HAND_ID_RE = /^[\w-]+$/;
 
 function safeEqual(a: string, b: string) {
   let diff = a.length ^ b.length;
@@ -22,6 +24,7 @@ const json = (body: unknown, status = 200) =>
 /**
  * GET /api/cloud?kind=hands|tournaments&stamp=<n>&id=<id>  → change feed page
  * GET /api/cloud?kind=text&id=<handId>                      → raw hand history (replayer)
+ * GET /api/cloud?kind=texts&ids=<id>,<id>…                  → raw hand histories (copy, max 200)
  */
 export async function GET(request: Request) {
   const key = process.env.APP_ACCESS_KEY?.trim();
@@ -35,6 +38,11 @@ export async function GET(request: Request) {
       if (!id) return json({ error: 'id manquant' }, 400);
       const text = await readHandText(id);
       return text === null ? json({ error: 'Main introuvable' }, 404) : json({ id, text });
+    }
+    if (kind === 'texts') {
+      const ids = (params.get('ids') ?? '').split(',').filter((i) => HAND_ID_RE.test(i));
+      if (!ids.length || ids.length > MAX_TEXT_IDS) return json({ error: `1 à ${MAX_TEXT_IDS} ids attendus` }, 400);
+      return json(await readHandTexts(ids));
     }
     if (kind !== 'hands' && kind !== 'tournaments') return json({ error: 'kind invalide' }, 400);
     const stamp = Number(params.get('stamp') ?? 0);

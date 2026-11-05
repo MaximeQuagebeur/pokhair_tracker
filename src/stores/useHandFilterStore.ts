@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { ReplayUnit } from '@/lib/poker/actionEngine';
 import { DEFAULT_HAND_SEARCH, type HandSearchFilters } from '@/lib/poker/hand-search';
 
@@ -15,17 +16,27 @@ interface HandFilterState {
   toggleSound: () => void;
 }
 
-export const useHandFilterStore = create<HandFilterState>()((set) => ({
-  filters: DEFAULT_HAND_SEARCH,
-  selectedHandId: null,
-  replayerUnit: 'stake',
-  soundOn: true,
-  setFilter: (key, value) =>
-    set((s) => ({
-      filters: { ...s.filters, [key]: value, ...(key === 'game' ? { limit: 'all' } : {}) },
-    })),
-  resetFilters: () => set({ filters: DEFAULT_HAND_SEARCH }),
-  selectHand: (id) => set({ selectedHandId: id }),
-  setReplayerUnit: (replayerUnit) => set({ replayerUnit }),
-  toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
-}));
+export const useHandFilterStore = create<HandFilterState>()(
+  persist(
+    (set) => ({
+      filters: DEFAULT_HAND_SEARCH,
+      selectedHandId: null,
+      replayerUnit: 'stake',
+      soundOn: true,
+      setFilter: (key, value) =>
+        set((s) => ({
+          filters: { ...s.filters, [key]: value, ...(key === 'game' ? { limit: 'all' } : {}) },
+        })),
+      resetFilters: () => set({ filters: DEFAULT_HAND_SEARCH }),
+      selectHand: (id) => set({ selectedHandId: id }),
+      setReplayerUnit: (replayerUnit) => set({ replayerUnit }),
+      toggleSound: () => set((s) => ({ soundOn: !s.soundOn })),
+    }),
+    // Only the replayer unit survives sessions; rehydrated on mount like the dashboard store.
+    {
+      name: 'pokhair-replayer',
+      skipHydration: true,
+      partialize: (s) => ({ replayerUnit: s.replayerUnit }),
+    },
+  ),
+);

@@ -444,6 +444,30 @@ export function buildReplay(text: string, unit: ReplayUnit = 'stake'): ReplayerH
   };
 }
 
+export interface PotOdds {
+  toCall: number;
+  /** Pot the hero can win by calling, before his call (bets he cannot cover excluded). */
+  pot: number;
+  /** Pot odds "1:ratio". */
+  ratio: number;
+  /** Equity needed to call profitably, in %. */
+  equity: number;
+}
+
+/** Pot odds offered to the hero when he is the next to act at `index` and faces a bet. */
+export function heroPotOdds(replay: ReplayerHand, index: number): PotOdds | null {
+  const step = replay.steps[index];
+  const next = replay.steps[index + 1];
+  const hero = step?.players.find((p) => p.isHero);
+  if (!hero || next?.kind !== 'action' || next.activeSeat !== hero.seat) return null;
+  const maxBet = Math.max(...step.players.map((p) => p.bet));
+  const toCall = round(Math.min(maxBet - hero.bet, hero.stack));
+  if (toCall <= 0) return null;
+  const cap = hero.bet + hero.stack;
+  const pot = round(step.pot + step.players.reduce((a, p) => a + Math.min(p.bet, cap), 0));
+  return { toCall, pot, ratio: pot / toCall, equity: (toCall / (pot + toCall)) * 100 };
+}
+
 /** Plain-text summary of the hand (players, actions street by street, result), e.g. to paste into an AI chat. */
 export function describeHand(replay: ReplayerHand, unit: ReplayUnit, header: string[] = []): string {
   const fmt = (v: number) => formatReplayAmount(v, replay, unit);

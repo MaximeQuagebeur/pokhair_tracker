@@ -19,6 +19,19 @@ export function cardToString(card: number): string {
 
 export const SUIT_SYMBOLS: Record<string, string> = { c: '♣', d: '♦', h: '♥', s: '♠' };
 
+/** Ranks from ace down, as used by the 13x13 starting hand grid. */
+export const GRID_RANKS = 'AKQJT98765432';
+
+/** Starting hand class of two hole cards: "AA", "AKs", "T9o"; null otherwise (Omaha, unknown). */
+export function handClass(cards: string[]): string | null {
+  if (cards.length !== 2) return null;
+  const [a, b] = cards.map((c) => ({ rank: GRID_RANKS.indexOf(c[0]?.toUpperCase()), suit: c[1]?.toLowerCase() }));
+  if (a.rank < 0 || b.rank < 0) return null;
+  if (a.rank === b.rank) return GRID_RANKS[a.rank].repeat(2);
+  const [hi, lo] = a.rank < b.rank ? [a, b] : [b, a];
+  return GRID_RANKS[hi.rank] + GRID_RANKS[lo.rank] + (a.suit === b.suit ? 's' : 'o');
+}
+
 /** "Td" -> "10♦". */
 export function prettyCard(token: string): string {
   const rank = token[0]?.toUpperCase() === 'T' ? '10' : (token[0]?.toUpperCase() ?? '');

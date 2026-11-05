@@ -48,6 +48,10 @@ const INFO = {
   vpip: 'Voluntarily Put $ In Pot : % des mains où vous mettez de l\'argent volontairement préflop (call ou relance, blindes exclues). Mesure à quel point vous jouez large.',
   pfr: 'PreFlop Raise : % des mains où vous relancez préflop. Plus il est proche du VPIP, plus votre jeu préflop est agressif.',
   threeBet: '% des fois où vous sur-relancez face à une première relance préflop, parmi toutes les occasions de le faire.',
+  foldToThreeBet: 'Fold to 3-Bet : % des fois où vous vous couchez quand votre open-raise préflop est sur-relancé.',
+  foldToCbet:
+    'Fold to C-Bet : % des fois où vous vous couchez face au continuation bet au flop du relanceur préflop.',
+  rake: 'Rake prélevé sur les pots que vous avez remportés (au prorata de vos gains en cas de partage), cash game uniquement. Le Net Won est déjà calculé rake déduit.',
   af: 'Aggression Factor : (mises + relances) / calls après le flop. Au-dessus de 2 = jeu agressif, en dessous de 1 = jeu passif.',
   wtsd: 'Went To ShowDown : % des flops vus que vous menez jusqu\'à l\'abattage.',
   wsd: 'Won $ at ShowDown : % des abattages que vous remportez.',
@@ -95,14 +99,25 @@ export function StatCards({ stats, unit, mode }: { stats: DashboardStats; unit: 
       {primaryStats(stats, unit, mode).map((s) => (
         <KeyStat key={s.label} {...s} />
       ))}
-      <Card className="grid grid-cols-3 divide-x sm:grid-cols-6 max-md:col-span-2 max-md:rounded-2xl max-sm:[&>*:nth-child(-n+3)]:border-b">
+      <Card className="grid grid-cols-4 divide-x sm:grid-cols-8 max-md:col-span-2 max-md:rounded-2xl max-sm:[&>*:nth-child(-n+4)]:border-b">
         <MiniStat label="VPIP" value={formatNumber(stats.vpip, 1, ' %')} info={INFO.vpip} align="start" />
         <MiniStat label="PFR" value={formatNumber(stats.pfr, 1, ' %')} info={INFO.pfr} />
         <MiniStat label="3Bet" value={formatNumber(stats.threeBet, 1, ' %')} info={INFO.threeBet} />
+        <MiniStat label="F3Bet" value={formatNumber(stats.foldToThreeBet, 1, ' %')} info={INFO.foldToThreeBet} align="end" />
+        <MiniStat label="FCBet" value={formatNumber(stats.foldToCbet, 1, ' %')} info={INFO.foldToCbet} align="start" />
         <MiniStat label="AF" value={formatNumber(stats.af, 2)} info={INFO.af} />
         <MiniStat label="WTSD" value={formatNumber(stats.wtsd, 1, ' %')} info={INFO.wtsd} align="end" />
         <MiniStat label="W$SD" value={formatNumber(stats.wsd, 1, ' %')} info={INFO.wsd} align="end" />
       </Card>
+      {mode !== 'tournament' && (
+        <KeyStat
+          label="Rake payé"
+          value={unit === 'eur' ? formatAmount(stats.rake, 'eur') : formatAmount(Math.round(stats.rakeBB * 10) / 10, 'bb')}
+          hint={`${formatNumber(stats.rakePer100, 2, ' bb/100')} · cash uniquement`}
+          tone="neutral"
+          info={INFO.rake}
+        />
+      )}
     </div>
   );
 }

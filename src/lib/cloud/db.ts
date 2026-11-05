@@ -84,3 +84,13 @@ export async function readHandText(id: string): Promise<string | null> {
   const { rows } = await db.execute({ sql: 'SELECT text FROM hand_texts WHERE id = ?', args: [id] });
   return rows[0] ? String(rows[0].text) : null;
 }
+
+export async function readHandTexts(ids: string[]): Promise<{ id: string; text: string }[]> {
+  if (!ids.length) return [];
+  const db = await ready();
+  const { rows } = await db.execute({
+    sql: `SELECT id, text FROM hand_texts WHERE id IN (${ids.map(() => '?').join(',')})`,
+    args: ids,
+  });
+  return rows.map((r) => ({ id: String(r.id), text: String(r.text) }));
+}

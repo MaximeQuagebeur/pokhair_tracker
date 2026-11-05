@@ -76,6 +76,15 @@ export async function fetchHandText(id: string): Promise<HandText | null> {
   }
 }
 
+/** Raw hand histories in bulk (copy of a filtered selection); not cached locally. */
+export async function fetchHandTexts(ids: string[]): Promise<HandText[]> {
+  const result: HandText[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    result.push(...(await api<HandText[]>({ kind: 'texts', ids: ids.slice(i, i + 100).join(',') })));
+  }
+  return result;
+}
+
 /** Desktop: pushes changed records; on failure, flags a full re-upload for the next sync. */
 export async function pushChanges(payload: CloudPayload) {
   const api = window.pokhair;

@@ -1,3 +1,4 @@
+import { LastHandsInput } from '@/components/ui/last-hands-input';
 import { Segmented } from '@/components/ui/segmented';
 import { DATE_OPTIONS, GAME_OPTIONS, type HandFilters } from '@/lib/poker/filters';
 
@@ -29,6 +30,11 @@ export function FiltersBar({ filters, limits, onChange }: FiltersBarProps) {
           </option>
         ))}
       </select>
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        Dernières
+        <LastHandsInput value={filters.lastN ?? 0} onChange={(lastN) => onChange({ ...filters, lastN })} />
+        mains
+      </label>
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { HoverTooltip } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-is-mobile';
-import type { CurvePoint, Unit } from '@/lib/poker/stats';
+import type { CurveExtremes, CurvePoint, Unit } from '@/lib/poker/stats';
 import { cn, formatAmount } from '@/lib/utils';
 
 const SERIES = [
@@ -46,6 +46,8 @@ const fullFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeS
 
 interface PerformanceChartProps {
   data: CurvePoint[];
+  /** Min / max of each curve over the full selection (the chart data is downsampled). */
+  extremes?: CurveExtremes | null;
   unit: Unit;
   xAxis: 'hand' | 'tournament';
   /** Label the X axis with the date of each hand / tournament instead of its number. */
@@ -53,7 +55,7 @@ interface PerformanceChartProps {
   series?: readonly SeriesKey[];
 }
 
-export function PerformanceChart({ data, unit, xAxis, showDates: byDate = false, series }: PerformanceChartProps) {
+export function PerformanceChart({ data, extremes, unit, xAxis, showDates: byDate = false, series }: PerformanceChartProps) {
   const [hidden, setHidden] = useState<Set<SeriesKey>>(new Set());
   const mobile = useIsMobile();
   const last = data[data.length - 1];
@@ -106,15 +108,23 @@ export function PerformanceChart({ data, unit, xAxis, showDates: byDate = false,
                 type="button"
                 onClick={() => toggle(s.key)}
                 className={cn(
-                  'flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-opacity',
+                  'flex flex-col items-stretch gap-0.5 rounded-md border px-2.5 py-1 text-xs transition-opacity',
                   'max-md:w-full max-md:min-w-0 max-md:rounded-xl max-md:py-2',
                   hidden.has(s.key) && 'opacity-40',
                 )}
               >
-                <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-                <span className="max-md:truncate">{s.label}</span>
-                {last && (
-                  <span className="tabular-nums text-muted-foreground max-md:ml-auto">{formatAmount(last[s.key], unit)}</span>
+                <span className="flex items-center gap-2">
+                  <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
+                  <span className="max-md:truncate">{s.label}</span>
+                  {last && (
+                    <span className="ml-auto tabular-nums text-muted-foreground">{formatAmount(last[s.key], unit)}</span>
+                  )}
+                </span>
+                {extremes && (
+                  <span className="flex justify-between gap-2 text-[10px] tabular-nums text-muted-foreground">
+                    <span>Min {formatAmount(extremes[s.key].min, unit)}</span>
+                    <span>Max {formatAmount(extremes[s.key].max, unit)}</span>
+                  </span>
                 )}
               </button>
             </HoverTooltip>

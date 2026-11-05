@@ -20,9 +20,15 @@ export interface DashboardStats {
   vpip: number;
   pfr: number;
   threeBet: number | null;
+  foldToThreeBet: number | null;
+  foldToCbet: number | null;
   af: number | null;
   wtsd: number | null;
   wsd: number | null;
+  /** Hero's share of the rake on cash hands, in € and in bb. */
+  rake: number;
+  rakeBB: number;
+  rakePer100: number | null;
 }
 
 const pct = (num: number, den: number) => (den > 0 ? (num / den) * 100 : null);
@@ -45,15 +51,32 @@ export function computeStats(hands: HandRecord[], tournaments: TournamentRecord[
   let sawFlop = 0;
   let showdowns = 0;
   let wonSd = 0;
+  let threeBetFaced = 0;
+  let foldToThreeBet = 0;
+  let cbetFaced = 0;
+  let foldToCbet = 0;
+  let rake = 0;
+  let rakeBB = 0;
 
   for (const h of hands) {
     if (isCashHand(h)) {
       cashHands++;
       cashNet += h.net;
+      // Records synced from an older parser may lack the field.
+      rake += h.heroRake ?? 0;
       if (h.bigBlind > 0) {
         netBB += h.net / h.bigBlind;
         evBB += h.allInEv / h.bigBlind;
+        rakeBB += (h.heroRake ?? 0) / h.bigBlind;
       }
+    }
+    if (h.threeBetFaced) {
+      threeBetFaced++;
+      if (h.foldToThreeBet) foldToThreeBet++;
+    }
+    if (h.cbetFaced) {
+      cbetFaced++;
+      if (h.foldToCbet) foldToCbet++;
     }
     if (h.vpip) vpip++;
     if (h.pfr) pfr++;
@@ -85,10 +108,32 @@ export function computeStats(hands: HandRecord[], tournaments: TournamentRecord[
     vpip: pct(vpip, n) ?? 0,
     pfr: pct(pfr, n) ?? 0,
     threeBet: pct(threeBet, threeBetOpp),
+    foldToThreeBet: pct(foldToThreeBet, threeBetFaced),
+    foldToCbet: pct(foldToCbet, cbetFaced),
     af: calls > 0 ? aggressive / calls : null,
     wtsd: pct(showdowns, sawFlop),
     wsd: pct(wonSd, showdowns),
+    rake,
+    rakeBB,
+    rakePer100: cashHands ? rakeBB / (cashHands / 100) : null,
   };
+}
+
+export type CurveKey = 'net' | 'ev' | 'showdown' | 'nonShowdown';
+export type CurveExtremes = Record<CurveKey, { min: number; max: number }>;
+
+/** Lowest and highest value of each cumulative curve (origin excluded). */
+export function curveExtremes(points: CurvePoint[]): CurveExtremes | null {
+  if (points.length < 2) return null;
+  const keys: CurveKey[] = ['net', 'ev', 'showdown', 'nonShowdown'];
+  const result = Object.fromEntries(keys.map((k) => [k, { min: Infinity, max: -Infinity }])) as CurveExtremes;
+  for (let i = 1; i < points.length; i++) {
+    for (const k of keys) {
+      result[k].min = Math.min(result[k].min, points[i][k]);
+      result[k].max = Math.max(result[k].max, points[i][k]);
+    }
+  }
+  return result;
 }
 
 export interface CurvePoint {

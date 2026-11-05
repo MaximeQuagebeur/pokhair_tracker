@@ -4,10 +4,10 @@ import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, typ
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronLeft, ChevronRight, Info, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X } from 'lucide-react';
 import { MiniCard, PlayingCard } from '@/components/hands/PlayingCard';
-import { Chips, playStepSound, Seat, stepStyle, STREETS } from '@/components/hands/PokerTableReplayer';
+import { Chips, playStepSound, PotBox, Seat, stepStyle, STREETS } from '@/components/hands/PokerTableReplayer';
 import { fetchHandText, isCloudWeb } from '@/lib/cloud/client';
 import { db } from '@/lib/db';
-import { buildReplay, formatReplayAmount, type ReplayerHand, type ReplayUnit } from '@/lib/poker/actionEngine';
+import { buildReplay, formatReplayAmount, heroPotOdds, type ReplayerHand, type ReplayUnit } from '@/lib/poker/actionEngine';
 import { analyzeStep } from '@/lib/poker/coach';
 import type { HandRecord } from '@/lib/poker/types';
 import { preloadSounds } from '@/lib/sounds';
@@ -52,6 +52,10 @@ export function MobileReplayer({ hand, counter, onPrevHand, onNextHand }: Mobile
   const unit = useHandFilterStore((s) => s.replayerUnit);
   const setUnit = useHandFilterStore((s) => s.setReplayerUnit);
   const replay = useMemo(() => (text ? buildReplay(text.text, unit) : null), [text, unit]);
+
+  useEffect(() => {
+    void useHandFilterStore.persist.rehydrate();
+  }, []);
 
   // The PWA only downloads hand histories when they are replayed.
   useEffect(() => {
@@ -221,12 +225,8 @@ function PortraitTable({ replay, unit }: { replay: ReplayerHand; unit: ReplayUni
         </div>
 
         {totalPot > 0 && (
-          <div
-            className="absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-black/45 px-3 py-0.5 text-xs font-semibold tabular-nums text-amber-200"
-            style={at({ x: 50, y: CENTER.y + 11 })}
-          >
-            Pot : {fmt(step.pot)}
-            {totalPot !== step.pot && <span className="ml-1 font-normal text-white/60">({fmt(totalPot)})</span>}
+          <div className="absolute -translate-x-1/2 -translate-y-1/2" style={at({ x: 50, y: CENTER.y + 11 })}>
+            <PotBox compact total={totalPot} odds={heroPotOdds(replay, index)} fmt={fmt} />
           </div>
         )}
 

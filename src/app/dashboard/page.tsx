@@ -10,10 +10,11 @@ import { StatCards, type StatsMode } from '@/components/dashboard/stat-cards';
 import { buttonVariants } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FilterField, FilterPanel, mobileSelectClass } from '@/components/ui/filter-panel';
+import { LastHandsInput } from '@/components/ui/last-hands-input';
 import { Segmented } from '@/components/ui/segmented';
 import { db } from '@/lib/db';
 import { availableLimits, DATE_OPTIONS, filterHands, filterTournaments, GAME_OPTIONS } from '@/lib/poker/filters';
-import { buildCurves, buildTournamentCurve, computeStats, type Unit } from '@/lib/poker/stats';
+import { buildCurves, buildTournamentCurve, computeStats, curveExtremes, type Unit } from '@/lib/poker/stats';
 import { useDashboardStore } from '@/stores/useDashboardStore';
 
 const UNIT_OPTIONS = [
@@ -39,13 +40,16 @@ export default function DashboardPage() {
     [sorted, allTournaments, filters.game],
   );
   const limit = limits.includes(filters.limit) ? filters.limit : 'all';
+  const lastN = filters.lastN ?? 0;
   const filtered = useMemo(
-    () => filterHands(sorted, { date: filters.date, game: filters.game, limit }),
-    [sorted, filters.date, filters.game, limit],
+    () => filterHands(sorted, { date: filters.date, game: filters.game, limit, lastN }),
+    [sorted, filters.date, filters.game, limit, lastN],
   );
+  // With "last N hands", tournaments are limited to the time window of those hands.
+  const since = lastN > 0 && filtered.length >= lastN ? filtered[0].timestamp : -Infinity;
   const filteredTournaments = useMemo(
-    () => filterTournaments(allTournaments, { date: filters.date, game: filters.game, limit }),
-    [allTournaments, filters.date, filters.game, limit],
+    () => filterTournaments(allTournaments, { date: filters.date, game: filters.game, limit }, undefined, since),
+    [allTournaments, filters.date, filters.game, limit, since],
   );
 
   const mode: StatsMode = filters.game === 'cash' ? 'cash' : filters.game === 'all' ? 'all' : 'tournament';
@@ -59,6 +63,16 @@ export default function DashboardPage() {
         : buildCurves(filtered, filteredTournaments, effectiveUnit, 400),
     [mode, filtered, filteredTournaments, effectiveUnit],
   );
+  // Full resolution: the downsampled chart may skip the extreme points.
+  const extremes = useMemo(
+    () =>
+      curveExtremes(
+        mode === 'tournament'
+          ? buildTournamentCurve(filteredTournaments, Infinity)
+          : buildCurves(filtered, filteredTournaments, effectiveUnit, Infinity),
+      ),
+    [mode, filtered, filteredTournaments, effectiveUnit],
+  );
   const tournamentsHiddenInBB = effectiveUnit === 'bb' && filteredTournaments.length > 0;
   const isEmpty = hands?.length === 0 && tournaments?.length === 0;
   const axisOptions = [
@@ -69,11 +83,12 @@ export default function DashboardPage() {
     DATE_OPTIONS.find((o) => o.value === filters.date)?.label,
     GAME_OPTIONS.find((o) => o.value === filters.game)?.label,
     limit === 'all' ? 'Toutes limites' : limit,
+    lastN > 0 && `${lastN.toLocaleString('fr-FR')} dernières mains`,
     mode !== 'tournament' && (unit === 'eur' ? '€' : 'BB'),
   ]
     .filter(Boolean)
     .join(' · ');
-  const activeCount = [filters.date !== 'all', filters.game !== 'all', limit !== 'all'].filter(Boolean).length;
+  const activeCount = [filters.date !== 'all', filters.game !== 'all', limit !== 'all', lastN > 0].filter(Boolean).length;
 
   return (
     <div className="flex flex-col gap-5 max-md:gap-4">
@@ -133,6 +148,13 @@ export default function DashboardPage() {
                 ))}
               </select>
             </FilterField>
+            <FilterField label="Dernières mains">
+              <LastHandsInput
+                className={mobileSelectClass}
+                value={lastN}
+                onChange={(n) => setFilters({ ...filters, lastN: n })}
+              />
+            </FilterField>
             <div className="grid grid-cols-2 gap-3">
               <FilterField label="Axe du graphique">
                 <Segmented fill value={axis} options={axisOptions} onChange={setAxis} />
@@ -158,6 +180,7 @@ export default function DashboardPage() {
               <PerformanceChart
                 key={mode}
                 data={curves}
+                extremes={extremes}
                 unit={effectiveUnit}
                 xAxis={mode === 'tournament' ? 'tournament' : 'hand'}
                 showDates={axis === 'date'}

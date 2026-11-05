@@ -25,6 +25,8 @@ import {
   buildReplay,
   describeHand,
   formatReplayAmount,
+  heroPotOdds,
+  type PotOdds,
   type ReplayerHand,
   type ReplayerPlayer,
   type ReplayerStep,
@@ -125,6 +127,9 @@ export function PokerTableReplayer({ hand, counter, onClose, onPrevHand, onNextH
   const [copied, setCopied] = useState(false);
 
   useEffect(() => setCopied(false), [hand.id]);
+  useEffect(() => {
+    void useHandFilterStore.persist.rehydrate();
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -297,6 +302,7 @@ function ReplayerView({
   const emptySeats = Array.from({ length: replay.maxSeats }, (_, i) => i + 1).filter((s) => !occupied.has(s));
   const button = step.players.find((p) => p.isButton);
   const totalPot = step.pot + step.players.reduce((a, p) => a + p.bet, 0);
+  const odds = heroPotOdds(replay, index);
   const collecting = step.kind !== 'action' && step.kind !== 'init';
 
   return (
@@ -314,13 +320,8 @@ function ReplayerView({
         </div>
 
         {/* Pot */}
-        <div className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={at({ x: 50, y: 61 })}>
-          {totalPot > 0 && (
-            <div className="rounded-full bg-black/45 px-3 py-0.5 text-xs font-semibold tabular-nums text-amber-200">
-              Pot : {fmt(step.pot)}
-              {totalPot !== step.pot && <span className="ml-2 font-normal text-white/60">(total {fmt(totalPot)})</span>}
-            </div>
-          )}
+        <div className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center" style={at({ x: 50, y: 62 })}>
+          {totalPot > 0 && <PotBox total={totalPot} odds={odds} fmt={fmt} />}
           {step.pots.length > 1 && (
             <div className="mt-1 flex justify-center gap-2 text-[10px] tabular-nums text-white/80">
               {step.pots.map((amount, i) => (
@@ -572,6 +573,39 @@ export function stepStyle(step: ReplayerStep): { color: string; label: string } 
     default:
       return { color: 'bg-amber-500', label: 'Relance' };
   }
+}
+
+const ratioFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
+
+/** Total pot (bets in front included) and, when the hero must call, his pot odds. */
+export function PotBox({
+  total,
+  odds,
+  fmt,
+  compact,
+}: {
+  total: number;
+  odds: PotOdds | null;
+  fmt: (v: number) => string;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        'whitespace-nowrap rounded-lg border bg-black/60 text-center tabular-nums shadow-md backdrop-blur-sm',
+        odds ? 'border-amber-300/60' : 'border-white/15',
+        compact ? 'px-2 py-0.5' : 'px-3 py-1',
+      )}
+    >
+      <div className={cn('font-semibold text-amber-200', compact ? 'text-[11px]' : 'text-xs')}>Pot total : {fmt(total)}</div>
+      {odds && (
+        <div className={cn('text-white/85', compact ? 'text-[10px]' : 'text-[11px]')}>
+          À payer {fmt(odds.toCall)} · Cote <span className="font-semibold text-white">1:{ratioFormat.format(odds.ratio)}</span>{' '}
+          ({ratioFormat.format(odds.equity)} %)
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function Chips() {

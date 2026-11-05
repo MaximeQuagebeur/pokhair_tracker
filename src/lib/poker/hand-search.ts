@@ -1,10 +1,12 @@
-import type { GameFilter } from './filters';
+import { handClass } from './cards';
+import { lastHands, type GameFilter } from './filters';
 import type { EndStreet, HandRecord, Position } from './types';
 
 export type ResultFilter = 'all' | 'won' | 'lost';
 export type PreflopFilter = 'all' | 'vpip' | 'pfr' | 'threeBet' | 'foldToThreeBet' | 'steal' | 'allIn';
 export type EndingFilter = 'all' | EndStreet;
 export type PotFilter = 'all' | 'small' | 'medium' | 'large';
+export type PlayersFilter = 'all' | 'headsUp' | 'multiway';
 export type HandDateRange = 'today' | '7d' | 'month' | 'all' | 'custom';
 export type SortKey = 'date' | 'net' | 'netBB';
 export type SortDir = 'asc' | 'desc';
@@ -17,6 +19,11 @@ export interface HandSearchFilters {
   preflop: PreflopFilter;
   ending: EndingFilter;
   pot: PotFilter;
+  players: PlayersFilter;
+  /** Starting hand classes ("AA", "AKs", "T9o"); empty = every hand. */
+  startingHands: string[];
+  /** Only the N most recent matching hands (0 = all). */
+  lastN: number;
   date: HandDateRange;
   /** `YYYY-MM-DD` (local), used when `date === 'custom'`. */
   from: string;
@@ -33,6 +40,9 @@ export const DEFAULT_HAND_SEARCH: HandSearchFilters = {
   preflop: 'all',
   ending: 'all',
   pot: 'all',
+  players: 'all',
+  startingHands: [],
+  lastN: 0,
   date: 'all',
   from: '',
   to: '',
@@ -75,6 +85,12 @@ export const POT_OPTIONS: { value: PotFilter; label: string }[] = [
   { value: 'small', label: 'Petits (< 10 bb)' },
   { value: 'medium', label: 'Moyens (10-50 bb)' },
   { value: 'large', label: 'Gros (> 50 bb)' },
+];
+
+export const PLAYERS_OPTIONS: { value: PlayersFilter; label: string }[] = [
+  { value: 'all', label: 'Tous coups' },
+  { value: 'headsUp', label: 'Heads-up (2)' },
+  { value: 'multiway', label: 'Multiway (3+)' },
 ];
 
 export const HAND_DATE_OPTIONS: { value: HandDateRange; label: string }[] = [
@@ -151,9 +167,16 @@ function matchesPot(h: HandRecord, filter: PotFilter): boolean {
   return true;
 }
 
+function matchesPlayers(h: HandRecord, filter: PlayersFilter): boolean {
+  if (filter === 'headsUp') return h.playersInPot === 2;
+  if (filter === 'multiway') return h.playersInPot >= 3;
+  return true;
+}
+
 export function searchHands(hands: HandRecord[], f: HandSearchFilters, now = new Date()): HandRecord[] {
   const [start, end] = dateBounds(f, now);
-  const result = hands.filter(
+  const range = f.startingHands.length ? new Set(f.startingHands) : null;
+  const matching = hands.filter(
     (h) =>
       h.timestamp >= start &&
       h.timestamp < end &&
@@ -163,8 +186,11 @@ export function searchHands(hands: HandRecord[], f: HandSearchFilters, now = new
       (f.position === 'all' || h.heroPosition === f.position) &&
       (f.ending === 'all' || h.endStreet === f.ending) &&
       matchesPreflop(h, f.preflop) &&
-      matchesPot(h, f.pot),
+      matchesPot(h, f.pot) &&
+      matchesPlayers(h, f.players) &&
+      (!range || range.has(handClass(h.heroCards) ?? '')),
   );
+  const result = lastHands(matching, f.lastN);
   const value = f.sortKey === 'date' ? (h: HandRecord) => h.timestamp : f.sortKey === 'net' ? (h: HandRecord) => h.net : netBB;
   const dir = f.sortDir === 'asc' ? 1 : -1;
   return result.sort((a, b) => dir * (value(a) - value(b) || a.timestamp - b.timestamp || a.id.localeCompare(b.id)));

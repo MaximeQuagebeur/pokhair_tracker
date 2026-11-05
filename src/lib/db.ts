@@ -74,6 +74,12 @@ class PokhairDB extends Dexie {
       .upgrade(async (tx) => {
         await tx.table('files').clear();
       });
+    // v9 adds board, players in pot, fold to c-bet / 3-bet and hero rake: re-parse every file.
+    this.version(9)
+      .stores({})
+      .upgrade(async (tx) => {
+        await tx.table('files').clear();
+      });
   }
 }
 

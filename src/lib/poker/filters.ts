@@ -8,6 +8,8 @@ export interface HandFilters {
   game: GameFilter;
   /** `'all'` or a value of `HandRecord.limit`. */
   limit: string;
+  /** Keep only the N most recent matching hands (0 / undefined = all). */
+  lastN?: number;
 }
 
 export const DATE_OPTIONS: { value: DateRange; label: string }[] = [
@@ -44,27 +46,40 @@ function dateBounds(range: DateRange, now: Date): [number, number] {
   }
 }
 
+/** The `n` most recent hands, oldest first (all of them when `n` is 0). */
+export function lastHands<T extends HandRecord>(hands: T[], n = 0): T[] {
+  if (!(n > 0) || hands.length <= n) return hands;
+  return hands
+    .slice()
+    .sort((a, b) => a.timestamp - b.timestamp || a.id.localeCompare(b.id))
+    .slice(-n);
+}
+
 export function filterHands(hands: HandRecord[], filters: HandFilters, now = new Date()): HandRecord[] {
   const [start, end] = dateBounds(filters.date, now);
-  return hands.filter(
+  const matching = hands.filter(
     (h) =>
       h.timestamp >= start &&
       h.timestamp < end &&
       (filters.game === 'all' || h.gameType === filters.game) &&
       (filters.limit === 'all' || h.limit === filters.limit),
   );
+  return lastHands(matching, filters.lastN);
 }
 
+/** `since`: tournaments ending before it are dropped (time window of the last N hands). */
 export function filterTournaments(
   tournaments: TournamentRecord[],
   filters: HandFilters,
   now = new Date(),
+  since = -Infinity,
 ): TournamentRecord[] {
   const [start, end] = dateBounds(filters.date, now);
   return tournaments.filter(
     (t) =>
       t.startTime >= start &&
       t.startTime < end &&
+      t.endTime >= since &&
       (filters.game === 'all' || t.gameType === filters.game) &&
       (filters.limit === 'all' || t.limit === filters.limit),
   );

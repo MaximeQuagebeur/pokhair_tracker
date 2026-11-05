@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildReplay, describeHand } from '../actionEngine';
+import { buildReplay, describeHand, heroPotOdds } from '../actionEngine';
+import { handClass } from '../cards';
+import { computeStats } from '../stats';
 import { DEFAULT_HAND_SEARCH, searchHands } from '../hand-search';
 import { parseWinamaxFile } from '../winamax-parser';
 
@@ -88,6 +90,12 @@ describe('hand record replayer fields', () => {
   const { hands, texts } = parseWinamaxFile([SIMPLE_HAND, FOLD_TO_3BET, ALL_IN].join('\n\n'), 'x.txt');
   const [simple, foldTo3Bet, allIn] = hands;
 
+  it('stores board, players in pot and faced 3-bets', () => {
+    expect(simple).toMatchObject({ board: ['8h', '3c', '2d'], playersInPot: 2, cbetFaced: false, threeBetFaced: false });
+    expect(foldTo3Bet).toMatchObject({ board: [], playersInPot: 1, threeBetFaced: true, foldToThreeBet: true });
+    expect(allIn).toMatchObject({ board: ['2c', 'Jh', 'Th', 'Ts', '4c'], playersInPot: 2 });
+  });
+
   it('stores raw texts', () => {
     expect(texts.map((t) => t.id)).toEqual(hands.map((h) => h.id));
     expect(texts[0].text.startsWith('Winamax Poker - CashGame')).toBe(true);
@@ -124,6 +132,87 @@ describe('hand record replayer fields', () => {
     expect(search({ pot: 'medium' })).toHaveLength(3);
     expect(search({ pot: 'small' })).toEqual([]);
     expect(search({ sortKey: 'netBB', sortDir: 'asc' })[0]).toBe(allIn);
+    expect(search({ startingHands: ['QQ', 'AKs'] })).toEqual([simple]);
+    expect(search({ startingHands: ['A4s', '76s'] }).map((h) => h.id)).toEqual([foldTo3Bet.id, allIn.id]);
+    expect(search({ players: 'headsUp' }).map((h) => h.id)).toEqual([simple.id, allIn.id]);
+    expect(search({ players: 'multiway' })).toEqual([]);
+    // Last N = most recent matching hands, whatever the sort.
+    expect(search({ lastN: 1, sortDir: 'asc' })).toEqual([foldTo3Bet]);
+  });
+
+  it('classifies starting hands', () => {
+    expect(handClass(['Qc', 'Qs'])).toBe('QQ');
+    expect(handClass(['4h', 'Ah'])).toBe('A4s');
+    expect(handClass(['Td', 'Kc'])).toBe('KTo');
+    expect(handClass(['Ah', 'Kh', 'Qh', 'Jh'])).toBeNull();
+  });
+});
+
+const FOLD_TO_CBET = `Winamax Poker - CashGame - HandId: #1-2-4 - Holdem no limit (0.01€/0.02€) - 2026/09/30 19:05:00 UTC
+Table: 'Nice 30' 6-max (real money) Seat #6 is the button
+Seat 1: SmallB (2€)
+Seat 2: MaxDr644 (2€)
+Seat 3: Utg (2€)
+Seat 6: Btn (2€)
+*** ANTE/BLINDS ***
+SmallB posts small blind 0.01€
+MaxDr644 posts big blind 0.02€
+Dealt to MaxDr644 [9d 8d]
+*** PRE-FLOP ***
+Utg raises 0.04€ to 0.06€
+Btn calls 0.06€
+SmallB folds
+MaxDr644 calls 0.04€
+*** FLOP *** [Ks 7h 2c]
+MaxDr644 checks
+Utg bets 0.10€
+Btn folds
+MaxDr644 folds
+Utg collected 0.27€ from pot
+*** SUMMARY ***
+Total pot 0.29€ | Rake 0.02€
+Board: [Ks 7h 2c]
+Seat 3: Utg won 0.27€
+`;
+
+describe('fold to c-bet and rake', () => {
+  const [hand] = parseWinamaxFile(FOLD_TO_CBET, 'x.txt').hands;
+  const [won] = parseWinamaxFile(
+    FOLD_TO_CBET.replace('MaxDr644 folds\nUtg collected', 'MaxDr644 raises 0.20€ to 0.30€\nUtg folds\nMaxDr644 collected').replace(
+      'Seat 3: Utg won',
+      'Seat 2: MaxDr644 won',
+    ),
+    'y.txt',
+  ).hands;
+
+  it('detects the c-bet faced by the hero', () => {
+    expect(hand).toMatchObject({ cbetFaced: true, foldToCbet: true, playersInPot: 3, heroRake: 0 });
+    expect(won).toMatchObject({ cbetFaced: true, foldToCbet: false, heroRake: 0.02 });
+    expect(searchHands([hand], { ...DEFAULT_HAND_SEARCH, players: 'multiway' })).toEqual([hand]);
+  });
+
+  it('aggregates fold to c-bet / 3-bet and rake', () => {
+    const [, foldTo3Bet] = parseWinamaxFile([SIMPLE_HAND, FOLD_TO_3BET].join('\n\n'), 'x.txt').hands;
+    const stats = computeStats([hand, won, foldTo3Bet]);
+    expect(stats.foldToCbet).toBe(50);
+    expect(stats.foldToThreeBet).toBe(100);
+    expect(stats.rake).toBeCloseTo(0.02, 4);
+    expect(stats.rakeBB).toBeCloseTo(1, 4);
+  });
+});
+
+describe('heroPotOdds', () => {
+  it('gives the pot odds when the hero must call', () => {
+    const replay = buildReplay(FOLD_TO_3BET)!;
+    // Step 6: BB folds, the hero faces the 3-bet to 0.18.
+    const odds = heroPotOdds(replay, 6)!;
+    expect(odds.toCall).toBeCloseTo(0.12, 4);
+    expect(odds.pot).toBeCloseTo(0.27, 4);
+    expect(odds.ratio).toBeCloseTo(2.25, 4);
+    expect(odds.equity).toBeCloseTo(30.77, 1);
+    expect(heroPotOdds(replay, 5)).toBeNull();
+    // UTG hero, first to act, only has the big blind to call.
+    expect(heroPotOdds(replay, 0)!.toCall).toBeCloseTo(0.02, 4);
   });
 });
 
