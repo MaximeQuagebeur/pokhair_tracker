@@ -19,7 +19,21 @@ function StatLabel({ label, info, align }: { label: string; info: string; align?
   );
 }
 
-function KeyStat({ label, value, hint, tone, info }: { label: string; value: string; hint: string; tone: Tone; info: string }) {
+function KeyStat({
+  label,
+  value,
+  hint,
+  note,
+  tone,
+  info,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  note?: string;
+  tone: Tone;
+  info: string;
+}) {
   return (
     <Card className="flex min-w-0 flex-col justify-center px-4 py-3 max-md:rounded-2xl">
       <StatLabel label={label} info={info} align="start" />
@@ -27,6 +41,7 @@ function KeyStat({ label, value, hint, tone, info }: { label: string; value: str
         {value}
       </span>
       <span className="text-xs text-muted-foreground max-md:truncate">{hint}</span>
+      {note && <span className="text-[11px] tabular-nums text-muted-foreground/80 max-md:truncate">{note}</span>}
     </Card>
   );
 }
@@ -51,7 +66,7 @@ const INFO = {
   foldToThreeBet: 'Fold to 3-Bet : % des fois où vous vous couchez quand votre open-raise préflop est sur-relancé.',
   foldToCbet:
     'Fold to C-Bet : % des fois où vous vous couchez face au continuation bet au flop du relanceur préflop.',
-  rake: 'Rake prélevé sur les pots que vous avez remportés (au prorata de vos gains en cas de partage), cash game uniquement. Le Net Won est déjà calculé rake déduit.',
+  rake: 'Rake payé : rake prélevé sur les pots que vous avez remportés (au prorata de vos gains en cas de partage), cash game uniquement.',
   af: 'Aggression Factor : (mises + relances) / calls après le flop. Au-dessus de 2 = jeu agressif, en dessous de 1 = jeu passif.',
   wtsd: 'Went To ShowDown : % des flops vus que vous menez jusqu\'à l\'abattage.',
   wsd: 'Won $ at ShowDown : % des abattages que vous remportez.',
@@ -75,6 +90,7 @@ function primaryStats(stats: DashboardStats, unit: Unit, mode: StatsMode) {
     ];
   }
   const net = unit === 'eur' ? stats.net : stats.netBB;
+  const rake = unit === 'eur' ? formatAmount(stats.rake, 'eur') : formatAmount(Math.round(stats.rakeBB * 10) / 10, 'bb');
   return [
     {
       label: mode === 'all' ? 'Winrate cash' : 'Winrate',
@@ -87,8 +103,9 @@ function primaryStats(stats: DashboardStats, unit: Unit, mode: StatsMode) {
       label: 'Gains nets',
       value: formatAmount(net, unit),
       hint: mode === 'all' && unit === 'eur' ? `${hands} · ${tournaments}` : hands,
+      note: `Rake payé : ${rake} (${formatNumber(stats.rakePer100, 2, ' bb/100')})`,
       tone: toneOf(net),
-      info: INFO.net,
+      info: `${INFO.net} ${INFO.rake}`,
     },
   ];
 }
@@ -109,15 +126,6 @@ export function StatCards({ stats, unit, mode }: { stats: DashboardStats; unit: 
         <MiniStat label="WTSD" value={formatNumber(stats.wtsd, 1, ' %')} info={INFO.wtsd} align="end" />
         <MiniStat label="W$SD" value={formatNumber(stats.wsd, 1, ' %')} info={INFO.wsd} align="end" />
       </Card>
-      {mode !== 'tournament' && (
-        <KeyStat
-          label="Rake payé"
-          value={unit === 'eur' ? formatAmount(stats.rake, 'eur') : formatAmount(Math.round(stats.rakeBB * 10) / 10, 'bb')}
-          hint={`${formatNumber(stats.rakePer100, 2, ' bb/100')} · cash uniquement`}
-          tone="neutral"
-          info={INFO.rake}
-        />
-      )}
     </div>
   );
 }
